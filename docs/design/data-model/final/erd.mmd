@@ -1,0 +1,238 @@
+erDiagram
+    PROJECT {
+        string project_id PK
+        string name
+        string workspace_project_path
+        string project_db_path
+        string default_processing_profile_id
+        string status
+    }
+
+    PROVIDER_CONFIG {
+        string provider_config_id PK
+        string provider_name
+        string provider_type
+        string secret_ref
+        string enabled
+    }
+
+    PROCESSING_PROFILE {
+        string profile_id PK
+        string name
+        int version
+        string scope
+    }
+
+    PROJECT_METADATA {
+        string project_id PK
+        string project_schema_version
+        string workspace_identity
+    }
+
+    BATCH {
+        string batch_id PK
+        string project_id
+        string name
+        string status
+    }
+
+    PAGE {
+        string page_id PK
+        string project_id
+        string batch_id FK
+        int page_index
+        string original_artifact_id FK
+        string active_cleaned_artifact_id FK
+        string active_typeset_artifact_id FK
+        string status
+    }
+
+    TEXT_BLOCK {
+        string text_block_id PK
+        string project_id
+        string batch_id FK
+        string page_id FK
+        int reading_order
+        string active_mask_artifact_id FK
+        string active_ocr_result_id FK
+        string active_translation_result_id FK
+        string locked_translation_result_id FK
+    }
+
+    OCR_RESULT {
+        string ocr_result_id PK
+        string project_id
+        string text_block_id FK
+        int version_number
+        string source_text_hash
+        string workflow_attempt_id FK
+        string tool_run_id FK
+    }
+
+    TRANSLATION_RESULT {
+        string translation_result_id PK
+        string project_id
+        string text_block_id FK
+        int version_number
+        string source_ocr_result_id FK
+        string source_text_hash
+        string glossary_version_id FK
+        string context_hash
+        string workflow_attempt_id FK
+        string tool_run_id FK
+    }
+
+    GLOSSARY_TERM {
+        string term_id PK
+        string project_id
+        string source_text
+        string target_text
+        string status
+    }
+
+    GLOSSARY_VERSION {
+        string glossary_version_id PK
+        string project_id
+        int version_number
+        string terms_hash
+        string snapshot_artifact_id FK
+    }
+
+    PROCESSING_TASK {
+        string task_id PK
+        string project_id
+        string target_type
+        string target_id
+        string profile_snapshot_id FK
+        string status
+    }
+
+    PROCESSING_PROFILE_SNAPSHOT {
+        string profile_snapshot_id PK
+        string project_id
+        string source_profile_id
+        int source_profile_version
+        string settings_hash
+    }
+
+    WORKFLOW_ATTEMPT {
+        string attempt_id PK
+        string project_id
+        string task_id FK
+        string stage
+        string target_type
+        string target_id
+        int attempt_number
+        string status
+    }
+
+    WORKFLOW_DECISION {
+        string decision_id PK
+        string project_id
+        string task_id FK
+        string attempt_id FK
+        string decision_type
+        string target_type
+        string target_id
+    }
+
+    WORKFLOW_DECISION_ISSUE {
+        string decision_id FK
+        string quality_issue_id FK
+        string relation_type
+    }
+
+    QUALITY_ISSUE {
+        string quality_issue_id PK
+        string project_id
+        string target_type
+        string target_id
+        string discovered_stage
+        string root_stage
+        string issue_type
+        string status
+        boolean is_blocking
+    }
+
+    PROCESSING_ARTIFACT {
+        string artifact_id PK
+        string project_id
+        string batch_id FK
+        string page_id FK
+        string text_block_id FK
+        string owner_type
+        string owner_id
+        string artifact_type
+        string relative_path
+        string file_hash
+        string storage_state
+    }
+
+    TOOL_RUN_LOG {
+        string tool_run_id PK
+        string project_id
+        string task_id FK
+        string attempt_id FK
+        string stage
+        string provider_name
+        string status
+        string input_artifact_id FK
+        string output_artifact_id FK
+    }
+
+    EXPORT_RECORD {
+        string export_id PK
+        string project_id
+        string target_type
+        string target_id
+        string profile_snapshot_id FK
+        string status
+        string output_artifact_id FK
+        string manifest_artifact_id FK
+    }
+
+    PROJECT ||--o{ BATCH : contains
+    PROJECT ||--o{ GLOSSARY_TERM : owns
+    PROJECT ||--o{ GLOSSARY_VERSION : versions
+    PROJECT ||--o{ PROCESSING_TASK : schedules
+    PROJECT ||--o{ PROCESSING_ARTIFACT : stores
+    PROJECT ||--o{ QUALITY_ISSUE : reports
+    PROJECT ||--o{ TOOL_RUN_LOG : logs
+    PROJECT ||--o{ EXPORT_RECORD : exports
+
+    PROCESSING_PROFILE ||--o{ PROCESSING_PROFILE_SNAPSHOT : snapshots
+    PROJECT ||--o{ PROCESSING_PROFILE_SNAPSHOT : stores
+
+    BATCH ||--o{ PAGE : has
+    PAGE ||--o{ TEXT_BLOCK : has
+
+    TEXT_BLOCK ||--o{ OCR_RESULT : versions
+    TEXT_BLOCK ||--o{ TRANSLATION_RESULT : versions
+    TEXT_BLOCK }o--o| OCR_RESULT : active_ocr
+    TEXT_BLOCK }o--o| TRANSLATION_RESULT : active_translation
+    TEXT_BLOCK }o--o| TRANSLATION_RESULT : locked_translation
+
+    TRANSLATION_RESULT }o--|| OCR_RESULT : source_ocr
+    TRANSLATION_RESULT }o--|| GLOSSARY_VERSION : uses_glossary
+
+    PROCESSING_TASK ||--o{ WORKFLOW_ATTEMPT : attempts
+    PROCESSING_TASK ||--o{ WORKFLOW_DECISION : decisions
+    PROCESSING_PROFILE_SNAPSHOT ||--o{ PROCESSING_TASK : policy
+
+    WORKFLOW_ATTEMPT ||--o{ TOOL_RUN_LOG : tool_runs
+    WORKFLOW_ATTEMPT ||--o{ WORKFLOW_DECISION : leads_to
+    WORKFLOW_ATTEMPT ||--o{ OCR_RESULT : creates
+    WORKFLOW_ATTEMPT ||--o{ TRANSLATION_RESULT : creates
+    WORKFLOW_ATTEMPT ||--o{ PROCESSING_ARTIFACT : emits
+
+    WORKFLOW_DECISION ||--o{ WORKFLOW_DECISION_ISSUE : based_on
+    QUALITY_ISSUE ||--o{ WORKFLOW_DECISION_ISSUE : informs
+
+    PAGE }o--o| PROCESSING_ARTIFACT : original
+    PAGE }o--o| PROCESSING_ARTIFACT : active_cleaned
+    PAGE }o--o| PROCESSING_ARTIFACT : active_typeset
+    TEXT_BLOCK }o--o| PROCESSING_ARTIFACT : active_mask
+    TOOL_RUN_LOG }o--o| PROCESSING_ARTIFACT : input_artifact
+    TOOL_RUN_LOG }o--o| PROCESSING_ARTIFACT : output_artifact
+    EXPORT_RECORD }o--o| PROCESSING_ARTIFACT : output
+    EXPORT_RECORD }o--o| PROCESSING_ARTIFACT : manifest
