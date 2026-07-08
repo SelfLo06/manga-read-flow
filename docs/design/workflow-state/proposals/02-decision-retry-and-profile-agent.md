@@ -34,7 +34,7 @@ The bias is toward:
 - Provider refusal is a first-class workflow path, not a crash.
 - Normal export blocks unresolved open blocking issues.
 - Warning export follows the immutable `ProcessingProfileSnapshot`, not the mutable current profile template.
-- `HLD.md` and `HLD-v0.2.md` differ in precision, not direction. This proposal uses `HLD-v0.2.md` where it clarifies data-model alignment.
+- The current `docs/HLD.md` baseline clarifies data-model alignment while preserving the same architecture direction.
 
 # 4. Proposed Model
 

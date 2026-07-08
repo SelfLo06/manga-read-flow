@@ -44,11 +44,7 @@ The plan is ready to generate implementation tasks because all required slices h
 - Exact policy for official unselected artifact cleanup after the recovery test. Cleanup scheduling is not required for MVP-0.
 - Exact crash retry ceiling defaults in the FakeProvider ProcessingProfileSnapshot.
 
-## 7. Resolved input conflict
+## 7. Resolved notes
 
-`GOAL.md` lists Slice 02 as import/artifact and Slice 03 as repository/UoW, while `PLAN.md` and the task prompt require Slice 02 repository/UoW and Slice 03 ArtifactService/import.
-
-Resolution:
-
-- Use the `PLAN.md` and task-prompt order.
-- This is non-blocking because the required output paths and slice sections are explicit in `PLAN.md`.
+- Slice ordering is now consistent across `GOAL.md`, `PLAN.md`, and the actual slice files: Slice 02 is Repository and Unit of Work Core; Slice 03 is ArtifactService and Import.
+- MVP-0 still stops at `ready_for_export`; actual export output, ZIP, manifest, and `ExportRecord` remain out of scope unless a later goal explicitly adds them.

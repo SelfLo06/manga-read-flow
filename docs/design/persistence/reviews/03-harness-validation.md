@@ -9,7 +9,7 @@ Validation target: whether the persistence readiness design is acceptable before
 - `AGENTS.md`
 - `docs/SRS-v1.0.md`
 - `docs/HLD.md`
-- `docs/HLD-v0.2.md`, because the final persistence design names it as the reconciled HLD baseline
+- `docs/HLD.md`, because the final persistence design names it as the reconciled HLD baseline
 - `docs/design/persistence/HARNESS.md`
 - `docs/design/persistence/PLAN.md`
 - all files under `docs/design/persistence/final/*.md`

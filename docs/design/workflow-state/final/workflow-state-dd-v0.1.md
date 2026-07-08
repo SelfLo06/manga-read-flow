@@ -13,7 +13,7 @@ The workflow-state design does not add manga search, scraping, download, distrib
 - `AGENTS.md`
 - `docs/SRS-v1.0.md`
 - `docs/HLD.md`
-- `docs/HLD-v0.2.md`
+- `docs/HLD.md`
 - `docs/PROJECT-PLAN.md`
 - `docs/design/workflow-state/GOAL.md`
 - `docs/design/workflow-state/HARNESS.md`

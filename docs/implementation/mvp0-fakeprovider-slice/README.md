@@ -1,6 +1,6 @@
 # MVP-0 FakeProvider Single-Page Backend Slice
 
-This directory contains the implementation planning package for Goal 4.
+This directory contains the completed implementation planning package for Goal 4.
 
 Scope:
 
@@ -20,4 +20,4 @@ Out of scope:
 * Batch-scale workflow.
 * P1/P2 features.
 
-This package should produce implementation-ready slices, validation commands, file boundaries, commit strategy, and Codex task prompts.
+This package has produced implementation-ready slices, validation commands, file boundaries, commit strategy, review, open questions, and Codex task prompts. The next implementation step is Slice 01: Foundation and Project Store.

@@ -2,7 +2,7 @@
 
 Review role: Phase 2 Cross-Review agent for Goal 3 Persistence Readiness Design.
 
-Inputs read: `AGENTS.md`, `docs/SRS-v1.0.md`, `docs/HLD.md`, `docs/HLD-v0.2.md`, `docs/PROJECT-PLAN.md`, persistence `GOAL.md`, `HARNESS.md`, `PLAN.md`, data-model final documents, workflow-state final design, execution-contract final design, all five persistence proposal files, and the persistence preflight for context.
+Inputs read: `AGENTS.md`, `docs/SRS-v1.0.md`, `docs/HLD.md`, `docs/PROJECT-PLAN.md`, persistence `GOAL.md`, `HARNESS.md`, `PLAN.md`, data-model final documents, workflow-state final design, execution-contract final design, all five persistence proposal files, and the persistence preflight for context.
 
 Overall review result: no blocking issue requires a limited proposal revision round. The proposals are implementation-ready enough for synthesis, but the final design must make several explicit synthesis decisions so the first FakeProvider persistence slice is not left to guess.
 
@@ -116,7 +116,7 @@ The proposals agree on the core persistence shape:
 
 No conflict is severe enough to require proposal revision, but the following must be resolved in final synthesis:
 
-- HLD source emphasis: proposals mostly cite `docs/HLD.md`; preflight and this review also read `docs/HLD-v0.2.md`. Final synthesis should use `HLD-v0.2.md` where it reconciles active pointers, export gate, Provider refusal, ArtifactService, and recovery, while preserving `docs/HLD.md` as the older baseline.
+- HLD source emphasis: proposals mostly cite `docs/HLD.md`; preflight and this review also read `docs/HLD.md`. Final synthesis should use the promoted `docs/HLD.md` baseline where it reconciles active pointers, export gate, Provider refusal, ArtifactService, and recovery.
 - Quality issue persistence: proposal 01 leaves QualityCheckService repository access open; execution-contract final chooses issue drafts with WorkflowLoopEngine persisting lifecycle changes in acceptance. Final should adopt the execution-contract choice for MVP-0.
 - ToolRunLog ownership: proposals allow either StageExecutor direct evidence writes or returning evidence for WorkflowLoopEngine to persist. Final must choose a narrow evidence writer model.
 - `WorkflowDecisionIssue`: data-model recommends the relation; proposals debate immediate implementation. Final should decide whether it is required for first refusal/warning tests or only after happy path.
@@ -219,7 +219,7 @@ Scope creep to exclude from final synthesis:
 The synthesizer should make these decisions:
 
 - Proceed to final synthesis without a limited proposal revision round.
-- Use `HLD-v0.2.md` plus the data-model, workflow-state, and execution-contract final documents as the current architecture baseline.
+- Use `docs/HLD.md` plus the data-model, workflow-state, and execution-contract final documents as the current architecture baseline.
 - Define app and project Unit of Work boundaries, but keep them as named persistence operations rather than a generic framework.
 - Require Project open to verify identity and migration readiness before any workflow repository is exposed.
 - Adopt the six-step stage sequence: reserve attempt, provider call outside write transaction, persist tool outcome, register artifacts unselected, quality check, acceptance transaction.

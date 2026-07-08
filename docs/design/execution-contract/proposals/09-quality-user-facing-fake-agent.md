@@ -33,7 +33,7 @@ Bias decisions:
 
 ## 3. Assumptions
 
-- `docs/HLD-v0.2.md` is the accepted HLD baseline and does not materially conflict with `docs/HLD.md`; it strengthens the same architecture direction.
+- `docs/HLD.md` is the accepted HLD baseline and strengthens the same architecture direction.
 - QualityCheckService creates/classifies issues but does not advance workflow state, update active pointers, or choose retry/fallback/skip/warning/block.
 - WorkflowLoopEngine owns decisions such as `fallback_provider`, `skip_target`, `mark_warning`, `pause_for_user`, and `block`.
 - Provider Adapters return structured success/error/refusal evidence and sanitized metadata; they do not create QualityIssue records.

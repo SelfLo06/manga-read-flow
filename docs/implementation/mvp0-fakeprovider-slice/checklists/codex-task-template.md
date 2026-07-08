@@ -9,7 +9,7 @@ State the specific slice goal in one paragraph. Include the target validation co
 - `AGENTS.md`
 - `docs/SRS-v1.0.md`
 - `docs/HLD.md`
-- `docs/HLD-v0.2.md`
+- `docs/HLD.md`
 - `docs/PROJECT-PLAN.md`
 - Relevant final design documents under `docs/design/**/final/`
 - `docs/implementation/mvp0-fakeprovider-slice/GOAL.md`

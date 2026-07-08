@@ -30,7 +30,7 @@ Design stance:
 
 | Assumption | Rationale |
 | --- | --- |
-| `docs/HLD-v0.2.md` is the stronger HLD baseline where present. | It explicitly syncs data-model decisions and architecture validation; no blocking conflict with `docs/HLD.md` was found for this proposal. |
+| `docs/HLD.md` is the current HLD baseline. | It explicitly syncs data-model decisions and architecture validation; no blocking conflict with source documents was found for this proposal. |
 | Canonical workflow stages are `import`, `detection`, `ocr`, `translation`, `translation_check`, `cleaning`, `typesetting`, `export_check`. | From workflow-state final vocabulary. |
 | `QualityIssue` fields from the data-model baseline are available conceptually. | This proposal does not create DDL; it uses existing field concepts. |
 | `QualityCheckService` may receive quality-strictness policy from `ProcessingProfileSnapshot`. | Severity/blocking can vary by profile, but retry/fallback/skip/pause/block policy must remain outside quality classification. |

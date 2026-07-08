@@ -100,11 +100,11 @@ Goal 4 is ready to generate Codex implementation tasks.
 
 Readiness is planning readiness only. No production code or validation tests were implemented or run in this task.
 
-## 8. Noted input conflict
+## 8. Resolved input conflict
 
-`docs/implementation/mvp0-fakeprovider-slice/GOAL.md` lists Slice 02 as import/artifact and Slice 03 as repository/UoW, while `docs/implementation/mvp0-fakeprovider-slice/PLAN.md` and the task prompt require Slice 02 repository/UoW and Slice 03 ArtifactService/import.
+`docs/implementation/mvp0-fakeprovider-slice/GOAL.md` formerly listed Slice 02 as import/artifact and Slice 03 as repository/UoW, while `docs/implementation/mvp0-fakeprovider-slice/PLAN.md` and the task prompt required Slice 02 repository/UoW and Slice 03 ArtifactService/import.
 
 Resolution:
 
-- Follow `PLAN.md` and the task prompt exactly for file names and implementation order.
-- Treat the `GOAL.md` ordering as stale planning text, not a blocking design conflict.
+- `GOAL.md` has been updated to match `PLAN.md` and the actual slice files.
+- The implementation order is now: Slice 02 Repository and Unit of Work Core; Slice 03 ArtifactService and Import.

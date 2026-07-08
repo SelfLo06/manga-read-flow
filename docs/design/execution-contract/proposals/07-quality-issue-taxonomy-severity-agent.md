@@ -15,7 +15,7 @@ Out of scope:
 - SQL DDL, ORM models, API DTOs, UI message text, prompt templates, real provider integrations, and full enterprise issue catalogs.
 - Detailed root-cause scoring or LLM-based quality review.
 
-No blocking conflict was found in the source documents for this slice. `HLD-v0.2.md` is treated as the richer accepted HLD baseline, and the workflow-state final documents rename readiness from `export` to `export_check`.
+No blocking conflict was found in the source documents for this slice. `docs/HLD.md` is treated as the richer accepted HLD baseline, and the workflow-state final documents rename readiness from `export` to `export_check`.
 
 ## 2. Role Bias
 

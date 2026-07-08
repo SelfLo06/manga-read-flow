@@ -104,7 +104,7 @@ Required source documents:
 
 * `AGENTS.md`
 * `docs/SRS-v1.0.md`
-* `docs/HLD.md` or `docs/HLD-v0.2.md`
+* `docs/HLD.md`
 * `docs/PROJECT-PLAN.md`
 * `docs/design/execution-contract/GOAL.md`
 * `docs/design/execution-contract/HARNESS.md`

@@ -14,8 +14,7 @@ Clean working tree at preflight start.
 | --- | --- | --- | --- |
 | `AGENTS.md` | Yes | Yes | Project governance and architecture invariants. |
 | `docs/SRS-v1.0.md` | Yes | Yes | Formal requirements baseline. |
-| `docs/HLD.md` | Yes | Yes | HLD file exists; document header says v0.1 while project plan also mentions current HLD-v0.2 as acceptable. |
-| `docs/HLD-v0.2.md` | No | N/A | Not required because `docs/HLD.md` is present. |
+| `docs/HLD.md` | Yes | Yes | Current promoted HLD v0.2 baseline. |
 | `docs/PROJECT-PLAN.md` | Yes | Yes | Development process and FakeProvider milestone baseline. |
 | `docs/design/execution-contract/GOAL.md` | Yes | Yes | Goal-specific design scope. |
 | `docs/design/execution-contract/HARNESS.md` | Yes | Yes | Goal-specific validation scenarios. |
@@ -57,7 +56,7 @@ Non-blocking vocabulary or version tensions to carry into proposal work:
 
 | Tension | Resolution for Goal 2 |
 | --- | --- |
-| `docs/HLD.md` header says HLD v0.1, while `docs/PROJECT-PLAN.md` says `docs/HLD.md` or current `HLD-v0.2.md` is accepted as baseline. | Use the existing readable `docs/HLD.md` because PLAN allows `docs/HLD.md` or `docs/HLD-v0.2.md`. Do not modify HLD. |
+| HLD path has since been promoted to `docs/HLD.md`. | Use the current readable `docs/HLD.md`; this historical review remains otherwise unchanged. |
 | HLD and SRS mention some Page/TextBlock quality flags directly, while data model and workflow-state designs use `QualityIssue`, active pointers, and repairable aggregate statuses. | Follow later final data-model/workflow-state baselines for detailed contract behavior; treat earlier flags as user-facing or aggregate summaries. |
 | Data model says a typesetting overflow preview artifact may be retained and, if accepted as preview, may update the active typeset pointer; HARNESS says blocking quality should not make the result export-effective. | Distinguish selected preview/history from export-effective output using stale/export-effective rules and open blocking issue checks. |
 | Data model includes `artifact_cleanup`; workflow-state excludes it from MVP single-Page happy path. | Keep cleanup vocabulary minimal for ArtifactService design; do not require cleanup execution in the FakeProvider vertical slice. |

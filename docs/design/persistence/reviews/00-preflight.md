@@ -15,7 +15,7 @@ Clean working tree at preflight start.
 | `AGENTS.md` | Present |
 | `docs/SRS-v1.0.md` | Present |
 | `docs/HLD.md` | Present |
-| `docs/HLD-v0.2.md` | Present |
+| `docs/HLD.md` | Present |
 | `docs/PROJECT-PLAN.md` | Present |
 | `docs/design/persistence/GOAL.md` | Present |
 | `docs/design/persistence/HARNESS.md` | Present |
@@ -38,7 +38,7 @@ Clean working tree at preflight start.
 
 All required source documents are readable.
 
-`docs/HLD-v0.2.md` is the richer HLD baseline because it explicitly reconciles the data-model, workflow-state, Provider Adapter, ArtifactService, export gate, active pointer, and recovery decisions. `docs/HLD.md` is also readable and remains a fallback/reference for older architecture text.
+`docs/HLD.md` is the promoted HLD baseline because it explicitly reconciles the data-model, workflow-state, Provider Adapter, ArtifactService, export gate, active pointer, and recovery decisions.
 
 ## 6. Source Document Conflict Check
 
@@ -49,7 +49,7 @@ Resolved history note: earlier preflight attempts observed `docs/design/persiste
 Non-blocking tensions to carry into proposals and synthesis:
 
 - `docs/PROJECT-PLAN.md` still lists several detailed designs as pending, while workflow-state and execution-contract final documents now exist. Treat the final documents as current authoritative inputs for persistence readiness.
-- `docs/design/execution-contract/final/execution-contract-dd-v0.1.md` says `docs/HLD-v0.2.md` was not present at its synthesis time, but it is present now. Use `HLD-v0.2.md` for this loop while preserving execution-contract final decisions unless a hard conflict is found.
+- `docs/design/execution-contract/final/execution-contract-dd-v0.1.md` originally reflected an older HLD path state. Use the current promoted `docs/HLD.md` baseline for this loop while preserving execution-contract final decisions unless a hard conflict is found.
 - Workflow-state uses `export_check` for readiness, while the data model includes `export` / `ExportRecord`. Persistence design must keep readiness checks and export records distinct.
 - QualityCheckService may create/classify issue drafts or issues depending on design layer wording. Execution-contract final chooses issue drafts for MVP-0, with WorkflowLoopEngine persisting issue lifecycle changes in the acceptance transaction. Persistence design should preserve that for implementation readiness.
 

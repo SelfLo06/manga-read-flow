@@ -23,7 +23,7 @@
 - Partial output semantics vary between explicit `partial_success`, success-with-evidence, and invalid output. Prefer explicit `partial_success` when valid target outputs are separable from missing/invalid targets.
 - `retry_hint` in Proposal 02 risks becoming a provider-owned decision. If retained, it must be optional advisory evidence and never consume retry budget.
 - Proposal 03 recommends tri-state `requires_gpu`; current high-level schema language is closer to boolean. Use tri-state in capability metadata, with storage mapping decided elsewhere.
-- Proposal 03 cites `docs/HLD-v0.2.md` as a baseline. This review treated only `docs/HLD.md` and the allowed proposal files as authoritative.
+- Proposal 03 cites `docs/HLD.md` as a baseline. This review treated only `docs/HLD.md` and the allowed proposal files as authoritative.
 
 ## 4. Missing contract details.
 
@@ -86,7 +86,7 @@
 - Temp file ownership, validation, and cleanup must be decided with ArtifactService before implementation.
 - Refusal handling must explicitly prevent retry/fallback logic from bypassing provider policy.
 - Partial-success acceptance must be decided with WorkflowLoopEngine and Repository before valid block outputs are persisted as active results.
-- The `docs/HLD-v0.2.md` reference in Proposal 03 must be removed or reconciled with the actual authoritative baseline.
+- The `docs/HLD.md` reference in Proposal 03 must be removed or reconciled with the actual authoritative baseline.
 
 ## 10. Non-blocking issues.
 

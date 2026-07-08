@@ -21,7 +21,7 @@ No unrelated user changes were present at the time Phase 0 began.
 | `AGENTS.md` | PASS | Readable. |
 | `docs/SRS-v1.0.md` | PASS | Readable. |
 | `docs/HLD.md` | PASS | Readable authoritative HLD per `AGENTS.md`. |
-| `docs/HLD-v0.2.md` | PASS | Also present and checked for alignment because the goal allows either HLD. |
+| `docs/HLD.md` | PASS | Also present and checked for alignment because the goal allows either HLD. |
 | `docs/PROJECT-PLAN.md` | PASS | Readable. |
 | `docs/design/workflow-state/GOAL.md` | PASS | Readable. |
 | `docs/design/workflow-state/HARNESS.md` | PASS | Readable. |
@@ -52,7 +52,7 @@ All required authoritative inputs are readable. The design loop can rely on:
 
 - `AGENTS.md` for collaboration, boundaries, data invariants, and commit rules.
 - `docs/SRS-v1.0.md` for product scope, functional requirements, MVP/P1/P2 boundaries, status candidates, retry/fallback expectations, and acceptance criteria.
-- `docs/HLD.md` plus alignment checks against `docs/HLD-v0.2.md` for architecture boundaries, workflow loop ownership, quality gates, provider adapter boundaries, artifact ownership, and recovery requirements.
+- `docs/HLD.md` for architecture boundaries, workflow loop ownership, quality gates, provider adapter boundaries, artifact ownership, and recovery requirements.
 - `docs/PROJECT-PLAN.md` for phase sequencing and the FakeProvider-first implementation direction.
 - Workflow-state `GOAL.md`, `HARNESS.md`, and `PLAN.md` for the exact loop execution and deliverables.
 - Data-model final documents for active pointers, attempt/decision persistence, artifact metadata, provider refusal persistence, crash recovery source-of-truth, export gates, and known non-blocking questions.
@@ -65,7 +65,7 @@ Non-blocking tensions to carry into proposals and synthesis:
 
 | Topic | Source tension | Preflight handling |
 | --- | --- | --- |
-| HLD version | `AGENTS.md` names `docs/HLD.md`; the goal allows `docs/HLD.md` or `docs/HLD-v0.2.md`; both files exist. | Use `docs/HLD.md` as the required AGENTS input and check `docs/HLD-v0.2.md` as an aligned strengthening baseline. |
+| HLD version | `AGENTS.md` names `docs/HLD.md`; the goal allows `docs/HLD.md`. | Use `docs/HLD.md` as the required AGENTS input and current baseline. |
 | Exact enum spellings | SRS/HLD include candidate statuses; data-model final explicitly leaves exact enum spellings open. | Phase 1 and final synthesis must define MVP vocabulary clearly enough for implementation guidance without writing DDL. |
 | Page aggregate status source | Data-model final asks whether Batch/Page aggregate status is persisted with reconciliation or mostly derived in early implementation. | Treat as a design question for the workflow-state final; recovery must not rely only on `Page.status`. |
 | QualityCheckService boundary | HLD and data-model documents say QualityCheckService creates or generates `QualityIssue`; architecture rules say QualityCheckService owns detection/attribution but must not advance workflow state. | Synthesis should clarify whether QualityCheckService returns issue classifications for repository persistence inside WorkflowLoopEngine transactions, while still owning detection and attribution. |

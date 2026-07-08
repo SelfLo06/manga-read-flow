@@ -81,7 +81,7 @@ Use these authoritative inputs:
 
 * `AGENTS.md`
 * `docs/SRS-v1.0.md`
-* `docs/HLD.md` or `docs/HLD-v0.2.md`
+* `docs/HLD.md`
 * `docs/PROJECT-PLAN.md`
 * `docs/design/data-model/final/data-model-dd-v0.1.md`
 * `docs/design/workflow-state/final/workflow-state-dd-v0.1.md`
@@ -111,14 +111,15 @@ Final planning should produce:
 
 * `docs/implementation/mvp0-fakeprovider-slice/PLAN.md`
 * `docs/implementation/mvp0-fakeprovider-slice/slices/01-foundation-and-project-store.md`
-* `docs/implementation/mvp0-fakeprovider-slice/slices/02-import-and-artifactservice.md`
-* `docs/implementation/mvp0-fakeprovider-slice/slices/03-repository-and-uow-core.md`
+* `docs/implementation/mvp0-fakeprovider-slice/slices/02-repository-and-uow-core.md`
+* `docs/implementation/mvp0-fakeprovider-slice/slices/03-artifactservice-and-import.md`
 * `docs/implementation/mvp0-fakeprovider-slice/slices/04-fakeprovider-and-stageexecutor.md`
 * `docs/implementation/mvp0-fakeprovider-slice/slices/05-workflowloop-happy-path.md`
 * `docs/implementation/mvp0-fakeprovider-slice/slices/06-quality-issues-and-readiness.md`
 * `docs/implementation/mvp0-fakeprovider-slice/slices/07-idempotency-and-recovery.md`
 * `docs/implementation/mvp0-fakeprovider-slice/checklists/implementation-readiness-checklist.md`
 * `docs/implementation/mvp0-fakeprovider-slice/checklists/codex-task-template.md`
+* `docs/implementation/mvp0-fakeprovider-slice/reviews/01-plan-review.md`
 * `docs/implementation/mvp0-fakeprovider-slice/open-questions.md`
 
 The exact slice count may be adjusted, but the final plan must keep implementation tasks small and verifiable.

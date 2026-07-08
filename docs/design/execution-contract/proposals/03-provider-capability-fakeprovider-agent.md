@@ -37,7 +37,7 @@ Design pressure:
 | Capability metadata is read before execution by workflow/config code, not by Provider Adapter from SQLite. | Preserves Provider Adapter boundary. |
 | FakeProvider may use temp files but never official artifact paths. | ArtifactService owns official lifecycle. |
 | The first vertical slice uses one Page and deterministic fixture IDs supplied by StageExecutor context. | Keeps tests reproducible. |
-| `docs/HLD-v0.2.md` is the current HLD input because it is present and accepted as detailed-design baseline. | Matches task instruction. |
+| `docs/HLD.md` is the current HLD input because it is present and accepted as detailed-design baseline. | Matches task instruction. |
 
 No blocking conflict found for this proposal. One vocabulary drift is already resolved by workflow-state final docs: use `export_check`, `done`, and `succeeded/succeeded_with_warnings` rather than older HLD/SRS names.
 

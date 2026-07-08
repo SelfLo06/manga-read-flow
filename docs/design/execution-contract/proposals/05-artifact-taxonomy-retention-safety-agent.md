@@ -31,7 +31,7 @@ Design stance:
 
 | Assumption | Rationale |
 | --- | --- |
-| `docs/HLD-v0.2.md` is the latest HLD baseline because it is present. | `docs/HLD.md` was checked and does not conflict on artifact safety. |
+| `docs/HLD.md` is the latest HLD baseline. | It does not conflict on artifact safety. |
 | Artifact type names are stable string vocabulary, not database enum DDL. | Exact enum enforcement is deferred by the data-model baseline. |
 | `ProcessingArtifact` stores metadata only in SQLite. | Image bytes and large/raw payload bytes stay in the filesystem. |
 | Text in `OCRResult` and `TranslationResult` may be stored as domain result data. | Raw provider request/response payloads are separate file artifacts when retained. |

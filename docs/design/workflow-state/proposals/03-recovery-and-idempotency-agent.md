@@ -29,7 +29,7 @@ Biases:
 
 # 3. Assumptions
 
-- `docs/HLD-v0.2.md` is treated as the stronger detailed-design baseline where it extends `docs/HLD.md`.
+- `docs/HLD.md` is treated as the current detailed-design baseline.
 - No blocking conflicts were found among the required source documents. One expected evolution exists: SRS has simpler Page/TextBlock state examples, while HLD v0.2 and the data-model final docs refine them with active pointers, attempts, decisions, artifacts, and recovery vocabulary.
 - MVP uses an in-process `TaskRunner`; recovery still persists enough state that a later runner can use the same model.
 - Recovery is a WorkflowService / WorkflowLoopEngine responsibility. It may use a named internal recovery routine, but this proposal does not require a new generic workflow engine.

@@ -122,7 +122,7 @@ Source documents:
 - AGENTS.md
 - docs/SRS-v1.0.md
 - docs/HLD.md
-- docs/HLD-v0.2.md
+- docs/HLD.md
 - docs/design/data-model/final/data-model-dd-v0.1.md
 - docs/design/workflow-state/final/workflow-state-dd-v0.1.md
 - docs/design/workflow-state/final/decision-matrix.md

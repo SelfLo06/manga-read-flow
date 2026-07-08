@@ -15,7 +15,7 @@ It focuses on:
 
 It does not design implementation code, SQL DDL, ORM mappings, API routes, frontend UI, Provider Adapter contracts, prompt templates, or final workflow-state synthesis files.
 
-No blocking source-document conflict was found for this proposal. `docs/HLD.md` is v0.1 and `docs/HLD-v0.2.md` is the accepted strengthened baseline; this proposal follows v0.2 where it adds active pointer, profile snapshot, export gate, provider refusal, and recovery decisions.
+No blocking source-document conflict was found for this proposal. `docs/HLD.md` is the accepted strengthened baseline; this proposal follows it where it adds active pointer, profile snapshot, export gate, provider refusal, and recovery decisions.
 
 # 2. Role Bias
 

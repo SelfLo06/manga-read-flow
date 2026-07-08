@@ -53,7 +53,7 @@ This design does not cover:
 The design must stay consistent with:
 
 * `docs/SRS-v1.0.md`
-* `docs/HLD.md` or `docs/HLD-v0.2.md`
+* `docs/HLD.md`
 * `docs/PROJECT-PLAN.md`
 * `docs/design/data-model/final/data-model-dd-v0.1.md`
 * `docs/design/data-model/final/schema-outline.md`

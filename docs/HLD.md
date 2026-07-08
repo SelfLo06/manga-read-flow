@@ -1,9 +1,24 @@
-# 系统概要设计说明书 HLD v0.1
+# 系统概要设计说明书 HLD v0.2
 
-版本：v0.1
-状态：概要设计初稿
-适用阶段：MVP / 单 Page 端到端闭环验证
+版本：v0.2
+状态：Accepted for Detailed Design / 架构补强版
+适用阶段：MVP / 单 Page 端到端闭环验证 / 后续详细设计与实现基线
 目标读者：项目维护者本人、AI 编码代理、后续详细设计与实现阶段
+基线关系：承接 SRS v1.0，吸收 Data Model Detailed Design v0.1 的架构反馈与数据边界决策
+
+## 0. v0.2 补强说明
+
+本版本不改变 HLD v0.1 的核心架构方向。
+
+v0.2 的补强目标是将 HLD 从“可进入详细设计的概要设计初稿”推进为“可作为详细设计与 MVP 实现基线的体系结构说明书”。补强范围包括：
+
+1. 补充架构视图，用图示固定系统上下文、容器、模块依赖、Workflow Loop、Provider Adapter 和 Artifact 生命周期；
+2. 增加 ADR 索引，明确哪些关键架构决策需要独立记录；
+3. 增加质量属性场景，使中断恢复、Provider 拒绝、导出阻塞、artifact 丢失、API key 缺失和局部失败隔离可验证；
+4. 同步数据模型详细设计 v0.1 的已定决策，避免 HLD 与数据模型在 active pointer、export gate、Provider refusal、ProcessingProfileSnapshot 等问题上漂移；
+5. 增加架构验证计划，作为 MVP 垂直切片和后续实现验收的前置依据。
+
+v0.2 仍不展开具体 DDL、API schema、Prompt 模板、Provider JSON schema、状态转移表、前端页面细节和完整测试用例。这些内容继续放入对应详细设计文档。
 
 ---
 
@@ -1598,22 +1613,40 @@ MVP 第一阶段成功标准：
 
 ## 16. 后续详细设计任务
 
-HLD 完成后，应进入以下详细设计：
+HLD v0.2 接受为详细设计与 MVP 实现基线后，详细设计任务按以下顺序推进。
 
-1. 数据模型详细设计；
-2. 状态机详细设计；
-3. WorkflowLoopEngine 详细设计；
-4. QualityIssue / QualityCheckService 详细设计；
-5. Provider Adapter 接口设计；
-6. TranslationProvider Prompt 与 JSON schema 设计；
-7. ProcessingProfile schema 设计；
-8. ArtifactService 详细设计；
-9. API 设计；
-10. UI 页面结构与交互流设计；
-11. 错误码与 IssueType 设计；
-12. 本地配置与 API key 管理设计；
-13. MVP 实现任务拆分；
-14. 测试用例设计。
+### 16.1 已完成或已形成基线的详细设计
+
+| 设计项 | 当前状态 | 说明 |
+| --- | --- | --- |
+| 数据模型详细设计 | 已形成 v0.1 基线 | 已明确 `app.db + project.db`、active pointer、artifact metadata、WorkflowAttempt、WorkflowDecision、QualityIssue、ToolRunLog、ExportRecord 等核心数据边界。 |
+| Workflow State / Workflow Loop 详细设计 | 已形成 v0.1 基线 | 已明确状态词汇、阶段转移、决策矩阵、retry budget、恢复规则和 stale 传播。 |
+| Execution Contract 详细设计 | 已形成 v0.1 基线 | 已明确 Provider Adapter、ArtifactService、QualityCheckService、StageExecutor、FakeProvider 的 MVP-0 最小契约。 |
+| Persistence Readiness 详细设计 | 已形成 v0.1 基线 | 已明确 Repository / DAO、Unit of Work、migration、acceptance transaction、recovery 和 idempotency 实现边界。 |
+| MVP-0 FakeProvider 实施计划 | 已形成 implementation-ready 计划 | 已将单 Page 后端实现拆为 7 个小切片，停在 `ready_for_export`，不包含实际 export output / ZIP / manifest / `ExportRecord`。 |
+
+### 16.2 后续设计与验证任务
+
+| 优先级 | 详细设计项 | 输出文档建议 | 主要内容 |
+| --- | --- | --- | --- |
+| P0-1 | MVP-0 FakeProvider Slice 01 实现 | `docs/implementation/mvp0-fakeprovider-slice/slices/01-foundation-and-project-store.md` | 创建最小 Python 后端骨架、临时 `app.db` / `project.db`、Project identity 和 migration readiness 测试。 |
+| P0-2 | 真实工具 Spike | 后续 research / spike 目录 | Detection/OCR、Page Translation JSON、Cleaning、Typesetting 的真实工具可行性和降级策略。 |
+| P1-1 | API 设计 | `docs/design/api/` | Project/Batch/Page/TextBlock/Task/Review/Export 路由、DTO、错误响应、文件预览接口。 |
+| P1-2 | UI Flow 设计 | `docs/design/ui/` | Project 列表、上传、处理配置、进度、质量报告、review、导出。 |
+| P1-3 | Export 设计 | `docs/design/export/` | 实际 export output、ZIP、manifest、ExportRecord、warning export、blocked export 行为。 |
+
+### 16.3 不应塞回 HLD 的内容
+
+以下内容不进入 HLD 正文，只在详细设计或实现文档中展开：
+
+1. SQLite DDL、SQLAlchemy model、Alembic migration；
+2. FastAPI 具体 route schema；
+3. Provider 具体 JSON schema；
+4. TranslationProvider Prompt 模板；
+5. Pillow 排版算法细节；
+6. OCR / 清字工具参数；
+7. 完整测试用例；
+8. 前端组件树和样式规范。
 
 ---
 
@@ -1643,3 +1676,558 @@ blocking 必须阻塞正常导出。
 结果按 TextBlock 存储。
 所有关键中间结果可追踪、可恢复、可局部返工。
 ```
+
+---
+
+## 18. 架构视图
+
+本节用于补足 HLD v0.1 中图示不足的问题。以下图示是架构级视图，不替代后续详细设计中的接口 schema、数据库 DDL、状态转移表和 UI 原型。
+
+### 18.1 系统上下文图
+
+```mermaid
+flowchart LR
+  User[普通漫画读者 / 个人汉化爱好者]
+  App[本地漫画翻译工作流应用]
+  Workspace[(本地 workspace\nSQLite + 文件系统)]
+  LocalTools[本地工具\n检测 / OCR / 清字 / 嵌字 / 本地翻译]
+  CloudLLM[云端或兼容 LLM Provider]
+  OSSecret[操作系统密钥存储 / 本地 secret 配置]
+
+  User -->|上传图片 / 校对 / 导出| App
+  App -->|保存项目、状态、artifact| Workspace
+  App -->|调用 Provider Adapter| LocalTools
+  App -->|可选：发送 OCR 文本与上下文| CloudLLM
+  App -->|读取 secret_ref 对应凭据| OSSecret
+
+  App -.不提供.-> NoDist[资源搜索 / 抓取 / 下载 / 分发 / 发布平台]
+```
+
+架构含义：
+
+1. 系统默认在用户本机运行；
+2. Project 数据、原图、artifact 和 workflow 状态默认保存到本地 workspace；
+3. 云端 LLM Provider 是可配置外部依赖，不是系统必需边界；
+4. 应用不提供漫画资源搜索、抓取、下载、分发和发布能力；
+5. 本地工具和云端 Provider 都必须通过 Provider Adapter 接入。
+
+### 18.2 容器 / 部署图
+
+```mermaid
+flowchart TB
+  subgraph LocalMachine[用户本机]
+    Browser[Local Web UI\nReact / Next.js]
+    API[FastAPI Backend\nAPI Layer + Application Service]
+    Runner[In-process TaskRunner]
+    Workflow[WorkflowService\nWorkflowLoopEngine]
+    QC[QualityCheckService]
+    Adapters[Provider Adapters]
+    Artifact[ArtifactService]
+    Repo[Repository / DAO]
+    Config[ConfigService]
+    SQLite[(app.db + project.db)]
+    Files[(workspace files)]
+    Tools[Local Tools\nPillow / OpenCV / OCR / local model]
+  end
+
+  Cloud[OpenAI-compatible Cloud Provider]
+
+  Browser --> API
+  API --> Runner
+  API --> Repo
+  Runner --> Workflow
+  Workflow --> QC
+  Workflow --> Adapters
+  Workflow --> Artifact
+  Workflow --> Repo
+  Workflow --> Config
+  Adapters --> Tools
+  Adapters --> Cloud
+  Artifact --> Files
+  Artifact --> Repo
+  Repo --> SQLite
+  Config --> SQLite
+```
+
+部署约束：
+
+1. Web UI 不直接访问数据库和文件系统正式 artifact；
+2. API handler 不同步执行长任务；
+3. TaskRunner 与 FastAPI 同进程是 MVP 选择，后续可替换为独立 worker；
+4. Provider Adapter 不访问 Repository，不登记正式 artifact，不决定 retry/fallback/skip/block；
+5. ArtifactService 是正式 workspace 文件生命周期唯一入口。
+
+### 18.3 模块依赖图
+
+```mermaid
+flowchart TD
+  UI[Web UI]
+  API[API Layer]
+  AppSvc[Application Service]
+  WorkflowSvc[WorkflowService]
+  Loop[WorkflowLoopEngine]
+  Stage[StageExecutor]
+  QC[QualityCheckService]
+  Adapter[Provider Adapter]
+  Artifact[ArtifactService]
+  Repo[Repository / DAO]
+  Config[ConfigService]
+  Domain[Domain Model]
+
+  UI --> API
+  API --> AppSvc
+  AppSvc --> WorkflowSvc
+  AppSvc --> Repo
+  WorkflowSvc --> Loop
+  Loop --> Stage
+  Loop --> QC
+  Loop --> Repo
+  Loop --> Artifact
+  Loop --> Config
+  Stage --> Adapter
+  Stage --> Artifact
+  Stage --> Repo
+  QC --> Domain
+  QC --> Repo
+  Adapter --> Domain
+  Artifact --> Repo
+  Repo --> Domain
+  Config --> Repo
+
+  Adapter -.禁止.-> Repo
+  Adapter -.禁止.-> Artifact
+  UI -.禁止.-> Repo
+  UI -.禁止.-> Adapter
+```
+
+依赖规则：
+
+1. UI 只通过 API 进入系统；
+2. Application Service 编排业务用例，不实现 Provider 调用细节；
+3. WorkflowLoopEngine 负责决策，不直接实现 OCR、翻译、清字、嵌字算法；
+4. QualityCheckService 负责发现和分类质量问题，不推进状态；
+5. Repository / DAO 封装 SQLite，Provider Adapter 不越过此边界；
+6. ArtifactService 封装正式 artifact 生命周期，Provider Adapter 只能使用临时文件。
+
+### 18.4 Workflow Loop 时序图
+
+```mermaid
+sequenceDiagram
+  participant UI as Web UI
+  participant API as API Layer
+  participant TR as TaskRunner
+  participant WF as WorkflowLoopEngine
+  participant ST as StageExecutor
+  participant PA as ProviderAdapter
+  participant AS as ArtifactService
+  participant QC as QualityCheckService
+  participant DB as Repository/DAO
+
+  UI->>API: Start Processing(Page/Batch, Profile)
+  API->>DB: Create ProcessingTask + ProfileSnapshot
+  API-->>UI: task_id
+  TR->>DB: Load runnable ProcessingTask
+  TR->>WF: Run workflow
+
+  loop bounded stages and retries
+    WF->>DB: Load active state, hashes, retry budget
+    WF->>ST: Execute stage
+    ST->>PA: Call provider with structured input
+    PA-->>ST: Structured output or standardized error
+    ST->>AS: Register output / failed evidence artifacts
+    AS->>DB: Persist artifact metadata
+    WF->>QC: Check stage output
+    QC->>DB: Persist QualityIssue if needed
+    WF->>DB: Persist WorkflowAttempt + ToolRunLog + WorkflowDecision
+    WF->>DB: Update active pointers and stage statuses when accepted
+  end
+
+  WF-->>TR: ready_for_export / ready_for_export_with_warnings / blocked
+  UI->>API: Poll task / quality report / preview
+  API->>DB: Read task, issues, active artifacts
+  API-->>UI: Current state
+```
+
+关键约束：
+
+1. 每一轮 stage attempt 都必须有限；
+2. 外部 Provider 调用前先持久化 attempt/task 起始状态；
+3. Provider 返回后，通过 ArtifactService 登记文件，再由 WorkflowLoopEngine 和 QualityCheckService 更新决策与状态；
+4. active pointer、QualityIssue、WorkflowDecision 和 stage status 应在同一事务边界内保持一致；
+5. crash recovery 不能只依赖 Page.status。
+
+### 18.5 Provider Adapter 调用边界图
+
+```mermaid
+flowchart LR
+  Stage[StageExecutor]
+  Adapter[Provider Adapter]
+  Temp[(临时文件 / 临时目录)]
+  Tool[具体工具或服务]
+  Artifact[ArtifactService]
+  Repo[Repository / DAO]
+  QC[QualityCheckService]
+  WF[WorkflowLoopEngine]
+
+  Stage -->|结构化输入| Adapter
+  Adapter -->|临时输入/输出| Temp
+  Adapter --> Tool
+  Tool --> Adapter
+  Adapter -->|结构化输出 / 标准化错误 / metadata| Stage
+  Stage --> Artifact
+  Artifact --> Repo
+  Stage --> QC
+  WF -->|retry / fallback / skip / block 决策| Stage
+
+  Adapter -.禁止访问.-> Repo
+  Adapter -.禁止创建.-> QC
+  Adapter -.禁止决定.-> WF
+  Adapter -.禁止登记正式 artifact.-> Artifact
+```
+
+Provider Adapter 只做“调用适配”，不做“业务裁决”。这条边界是避免工具耦合、测试困难和恢复状态不可解释的关键架构约束。
+
+### 18.6 Artifact 生命周期图
+
+```mermaid
+stateDiagram-v2
+  [*] --> temp_written: Provider/Stage creates temp output
+  temp_written --> registered: ArtifactService atomic move + hash + metadata
+  registered --> present
+  present --> active_result: selected by active pointer
+  present --> successful_payload: retained by profile policy
+  present --> failed_attempt_payload: retained by default
+  present --> export_output: export succeeds
+  successful_payload --> metadata_only_cleaned: cleanup policy removes bytes
+  present --> moved_to_trash: soft delete / project trash
+  moved_to_trash --> present: restore + hash validation
+  moved_to_trash --> deleted: permanent delete
+  present --> missing: file absent or hash mismatch
+  active_result --> present: replaced but retained
+  active_result --> moved_to_trash: owner soft delete
+  metadata_only_cleaned --> [*]
+  deleted --> [*]
+```
+
+Artifact 规则：
+
+1. 原图不可覆盖；
+2. 图片和大 payload 不进入 SQLite；
+3. SQLite 只保存 artifact metadata、hash、路径、scope、retention、storage_state；
+4. active original、active cleaned、active typeset、active mask、export output、失败证据 artifact 不得被普通 cleanup 删除；
+5. 文件缺失不是删除记录，应记录为 `missing` 并进入修复或降级路径。
+
+---
+
+## 19. 关键架构决策与 ADR 索引
+
+HLD 正文保留架构结论，ADR 记录“为什么这样选、拒绝什么、后果是什么”。以下 ADR 建议放入：
+
+```text
+docs/adr/architecture/
+```
+
+### 19.1 架构 ADR 清单
+
+| ADR | 决策 | 状态 | 主要后果 |
+| --- | --- | --- | --- |
+| `0001-local-web-fastapi.md` | MVP 采用本地 Web UI + FastAPI 后端 | Accepted | 保留桌面化可能，降低前期桌面壳复杂度。 |
+| `0002-inprocess-taskrunner.md` | MVP 使用同进程 TaskRunner | Accepted for MVP | 快速实现中断恢复和任务状态；后续可替换独立 worker。 |
+| `0003-app-db-project-db-split.md` | 使用 `app.db + project.db` | Accepted | 强化 Project 隔离、备份、恢复和删除边界。 |
+| `0004-provider-adapter-boundary.md` | OCR/检测/翻译/清字/嵌字全部经 Provider Adapter | Accepted | 工具可替换；Provider 不接触数据库和正式 artifact。 |
+| `0005-artifactservice-owns-files.md` | ArtifactService 统一正式 artifact 生命周期 | Accepted | 避免路径、hash、retention、trash 策略分散。 |
+| `0006-workflow-loop-quality-gate.md` | 主流程采用 Workflow Loop + Quality Gate | Accepted | 一键处理可自动重试、fallback、warning、block。 |
+| `0007-qualityissue-export-gate.md` | 正常导出阻塞 open blocking QualityIssue | Accepted | 导出安全可数据化复现。 |
+| `0008-processing-profile-snapshot.md` | 执行时保存 immutable ProcessingProfileSnapshot | Accepted | 历史 retry、warning export、retention 决策可解释。 |
+| `0009-active-result-pointers.md` | active pointer 是 P0 当前结果唯一来源 | Accepted | 避免 result 表 active flag 冲突。 |
+| `0010-provider-refusal-first-class.md` | Provider refusal 是一等 workflow 路径 | Accepted | 拒绝不当作普通崩溃，可 fallback / manual / block。 |
+| `0011-original-image-safety.md` | 原图永不覆盖 | Accepted | 所有清字、嵌字、导出都生成新 artifact。 |
+| `0012-nsfw-and-provider-policy.md` | 不绕过第三方 Provider 内容策略 | Accepted | 可本地处理合法自用内容，但不提供规避策略。 |
+
+### 19.2 ADR 与详细设计的关系
+
+ADR 不替代详细设计。ADR 只固定高层决策，详细设计继续负责：
+
+1. DDL / ORM / migration；
+2. API route / DTO；
+3. Provider input/output schema；
+4. Workflow 状态转移表；
+5. retry budget 算法；
+6. Artifact 目录布局与原子写入；
+7. QualityIssue taxonomy；
+8. UI 交互细节。
+
+---
+
+## 20. 质量属性场景
+
+本节将 HLD 中已有的可靠性、可恢复性、可维护性、安全边界和成本控制要求转化为可验证场景。
+
+### 20.1 场景总表
+
+| 场景 ID | 质量属性 | 触发条件 | 期望响应 | 架构机制 | 验证方式 |
+| --- | --- | --- | --- | --- | --- |
+| QA-REC-001 | 中断恢复 | 处理过程中应用进程退出 | 重启后识别 interrupted/running task，恢复到可继续状态，已完成 OCR/翻译不重复调用 | ProcessingTask heartbeat、WorkflowAttempt、active pointer、artifact hash、stage status | Crash recovery test |
+| QA-REC-002 | 单块失败隔离 | 某 TextBlock OCR 或翻译失败 | 失败块记录 QualityIssue，其他块继续处理，Page 可进入 warning 或 blocked | TextBlock 分阶段状态、QualityIssue scope、WorkflowDecision | FakeProvider partial failure test |
+| QA-REL-001 | 原图安全 | 清字、嵌字或导出执行 | 原始上传图片不被覆盖，所有输出为新 artifact | Page.original_artifact_id、ArtifactService、workspace 目录策略 | Artifact lifecycle test |
+| QA-REL-002 | Provider 拒绝 | 云端翻译 Provider 返回 policy refusal | 记录 refusal，不崩溃；按 profile fallback、manual、warning 或 block | Provider Adapter 标准错误、ToolRunLog、WorkflowAttempt、QualityIssue、WorkflowDecision | Provider refusal test |
+| QA-REL-003 | Artifact 丢失 | active cleaned/typeset 文件被手动删除 | 标记 artifact missing，不盲目导出；可重建则重建，不可重建则产生 blocking issue | ProcessingArtifact.storage_state、hash validation、ExportCheck | Missing artifact test |
+| QA-SEC-001 | API key 缺失 | 用户启动云端翻译但未配置 API key | 翻译 Provider unavailable；相关阶段 blocked 或 fallback；不影响本地 Project 浏览 | ConfigService、ProviderConfig secret_ref、Provider availability check | Config failure test |
+| QA-SEC-002 | 敏感 debug payload | 用户开启 debug artifact 持久化 | UI 提示可能包含原图、OCR、译文和 Provider 响应；日志不得包含 secret | Artifact safety flags、redaction、ConfigService warning | Debug artifact inspection |
+| QA-MNT-001 | Provider 替换 | 从云端翻译切换到本地 OpenAI-compatible Provider | Workflow 层不改动，仅替换 provider config 和 adapter 配置 | Provider Adapter、ProviderConfig、ProcessingProfileSnapshot | Adapter contract test |
+| QA-MNT-002 | 详细设计演进 | 后续加入 LaMa 或竖排排版 | 不影响 API、Workflow 和 Result 版本模型主干 | CleanerProvider/TypesetterProvider 抽象、artifact metadata | Extension spike |
+| QA-COST-001 | 避免重复调用 | 用户重新处理未变化 TextBlock | 命中缓存或复用 result，记录 reused_cached，不重复 OCR/LLM | input_hash、config_hash、provider/model、glossary/context hash、WorkflowDecision | Idempotency test |
+| QA-EXP-001 | 导出阻塞 | 导出范围内存在 open blocking QualityIssue | ExportRecord blocked，不生成正常 output artifact | ExportCheck、QualityIssue query、ExportRecord | Export gate test |
+| QA-EXP-002 | warning 导出 | 仅存在 warning issue | 按 ProcessingProfileSnapshot.allow_warning_export 决定导出或阻塞 | Profile snapshot、QualityIssue severity、ExportRecord warning snapshot | Warning export test |
+
+### 20.2 中断恢复场景
+
+目标：验证系统不依赖单一 Page.status 恢复。
+
+触发：
+
+```text
+处理到 OCR 完成、Translation 尚未开始时，进程异常退出。
+```
+
+期望：
+
+1. 重启时发现 `ProcessingTask.status = running` 且 heartbeat stale；
+2. 将任务标记为 `interrupted`，再进入 `recovering`；
+3. 检查 active OCR pointer、OCRResult、artifact、WorkflowAttempt 和 ToolRunLog；
+4. 若 OCR 结果完整，修复状态并从 translation 继续；
+5. 不重新调用 OCR Provider。
+
+### 20.3 Provider 拒绝场景
+
+目标：验证 Provider refusal 是 workflow path，而不是系统异常。
+
+触发：
+
+```text
+TranslationProvider 返回 provider_refusal / policy refusal。
+```
+
+期望：
+
+1. Provider Adapter 返回标准化错误；
+2. ToolRunLog 记录 `is_provider_refusal = true`；
+3. WorkflowAttempt 记录 refused；
+4. QualityIssue 记录 root_stage = provider_policy；
+5. WorkflowDecision 根据 ProcessingProfileSnapshot 决定 fallback_provider、pause_for_user、mark_warning、skip_target 或 block；
+6. UI 给出可理解提示，不暴露敏感 provider payload。
+
+### 20.4 Export Gate 场景
+
+目标：验证导出是数据驱动的 gate，而不是 UI 状态判断。
+
+触发：
+
+```text
+用户尝试导出 Page 或 Batch。
+```
+
+期望：
+
+1. ExportCheck 查询目标范围内 `is_blocking = true and status = open` 的 QualityIssue；
+2. 存在 blocker 时，创建或更新 ExportRecord 为 blocked；
+3. 不生成正常 output artifact；
+4. 仅有 warning 时，读取执行时 ProcessingProfileSnapshot 决定是否允许 warning export；
+5. 成功导出时记录 output artifact、manifest artifact 和 issue snapshot。
+
+### 20.5 Artifact 丢失场景
+
+目标：验证文件系统漂移不会造成静默错误。
+
+触发：
+
+```text
+用户手动删除 active typeset artifact 文件后点击预览或导出。
+```
+
+期望：
+
+1. ArtifactService 检查路径和 hash；
+2. 文件不存在或 hash 不一致时，将 artifact 标记为 `missing`；
+3. 如果可由 active cleaned artifact + active translation 重建，则触发重建；
+4. 如果不可重建，则 QualityCheckService 产生 blocking issue；
+5. ExportCheck 阻止正常导出。
+
+---
+
+## 21. 与数据模型详细设计 v0.1 的同步边界
+
+数据模型详细设计 v0.1 已经对若干 HLD 概要决策进行了收敛。本节将这些结果回填到 HLD，避免后续详细设计之间发生概念漂移。
+
+### 21.1 已同步的核心决策
+
+| 决策项 | HLD v0.2 固定口径 | 影响范围 |
+| --- | --- | --- |
+| `app.db + project.db` | app.db 保存全局注册、全局设置、ProviderConfig、ProcessingProfile；project.db 保存 Project 内容、workflow、quality、artifact、export。 | 存储、Repository、migration、backup/restore。 |
+| active pointer | `TextBlock.active_ocr_result_id`、`TextBlock.active_translation_result_id`、`Page.original_artifact_id`、`Page.active_cleaned_artifact_id`、`Page.active_typeset_artifact_id` 是 P0 当前结果来源。 | UI、Workflow、Export、Recovery。 |
+| 不使用 result active flag | OCRResult / TranslationResult 不维护独立 active flag。 | ORM、Repository、并发更新。 |
+| ProjectConfig 映射 | SRS 中的 ProjectConfig 不作为独立 P0 表；映射到 Project defaults、ProviderConfig references、ProcessingProfile templates 和 ProcessingProfileSnapshot。 | 数据模型、配置 UI、任务执行。 |
+| ProcessingProfileSnapshot | 每次任务/export 使用 immutable snapshot，不能只引用当前 mutable profile。 | retry、warning export、retention、历史解释。 |
+| Provider refusal | 作为 ToolRunLog + WorkflowAttempt + QualityIssue + WorkflowDecision 持久化。 | 错误处理、合规边界、恢复、UI 提示。 |
+| Export gate | 正常导出阻塞 open blocking QualityIssue；warning export 由 ProcessingProfileSnapshot 决定。 | ExportService、QualityCheckService、UI 导出按钮。 |
+| Artifact storage state | 使用 `present`、`metadata_only_cleaned`、`moved_to_trash`、`missing`、`deleted`。 | ArtifactService、cleanup、trash、restore。 |
+| Page-level translation partial output | Page 级翻译 attempt 可产生部分 TranslationResult，同时为缺失/无效 block 创建 QualityIssue。 | TranslationProvider、QualityCheck、Review UI。 |
+| Crash recovery vocabulary | 使用 `interrupted`、`recovering`、`abandoned_after_crash` 处理 stale running task/attempt。 | TaskRunner、Workflow recovery、UI 状态。 |
+| TranslationResult source link | TranslationResult 必须记录 `source_ocr_result_id` 和 `source_text_hash`。 | stale 判断、审计、缓存。 |
+| TextBlock geometry | P0 geometry 字段直接放 TextBlock；GeometryRevision 延后到 P1。 | 数据模型、检测、review、清字、嵌字。 |
+
+### 21.2 HLD 与详细设计分工
+
+HLD 固定：
+
+1. 系统边界；
+2. 容器与模块划分；
+3. 依赖方向；
+4. 关键架构机制；
+5. 决策来源与 ADR；
+6. 质量属性场景；
+7. 架构验证计划。
+
+详细设计固定：
+
+1. 表结构、字段类型、索引、约束；
+2. API route 和 DTO；
+3. Provider schema；
+4. 状态转移表；
+5. retry budget arithmetic；
+6. artifact 目录与清理细节；
+7. QualityIssue taxonomy；
+8. 用户提示文案；
+9. 测试用例。
+
+### 21.3 架构不变量
+
+以下不变量在详细设计和实现中不得被局部便利破坏：
+
+1. Provider Adapter 不访问数据库；
+2. Provider Adapter 不登记正式 artifact；
+3. Provider Adapter 不创建 QualityIssue；
+4. WorkflowLoopEngine 决定 retry/fallback/skip/warning/block；
+5. QualityCheckService 负责质量检查和 issue 分类；
+6. ArtifactService 是正式 artifact 生命周期唯一入口；
+7. Repository / DAO 是 SQLite 访问唯一入口；
+8. 原图永不覆盖；
+9. 导出必须经过 ExportCheck；
+10. recovery 不能只依赖 Page.status；
+11. active pointer 是当前结果 source of truth；
+12. debug artifact 和 logs 不得包含 raw secret。
+
+---
+
+## 22. 架构验证计划
+
+本节定义 HLD 级架构验证，不替代后续完整测试用例。验证目标是尽早证明架构机制可行，避免先堆 UI 或 Provider 集成后才发现 workflow、artifact、recovery 或 export gate 不成立。
+
+### 22.1 验证顺序
+
+```text
+AV-001 FakeProvider 单 Page 垂直切片
+→ AV-002 Artifact 生命周期验证
+→ AV-003 Workflow retry / fallback / warning / block 验证
+→ AV-004 Crash recovery 验证
+→ AV-005 Provider refusal 验证
+→ AV-006 Export gate 验证
+→ AV-007 真实 OCR/Translation/Cleaning/Typesetting Spike
+```
+
+### 22.2 验证用例清单
+
+| ID | 验证项 | 前置条件 | 操作 | 通过标准 |
+| --- | --- | --- | --- | --- |
+| AV-001 | 单 Page 垂直切片 | Fake Detector/OCR/Translator/Cleaner/Typesetter 可用 | 创建 Project、上传 1 页、启动一键处理 | 生成 TextBlock、OCRResult、TranslationResult、cleaned/typeset artifact、QualityReport、ready_for_export。 |
+| AV-002 | Artifact lifecycle | 使用 FakeProvider 生成文件 artifact | 删除/替换/清理 artifact | active artifact 不被 cleanup 删除；缺失文件被标记 missing；原图不被覆盖。 |
+| AV-003 | Workflow decision | FakeProvider 配置不同错误输出 | 触发 retry、fallback、skip、warning、block | 每次决策有 WorkflowAttempt、QualityIssue、WorkflowDecision 记录。 |
+| AV-004 | Crash recovery | 任务执行中可强制 kill 进程 | 在 OCR 后、Translation 前 kill；重启 | 已完成 OCR 不重复调用；任务进入 recovering 后继续 translation。 |
+| AV-005 | Provider refusal | Fake TranslationProvider 返回 provider_refusal | 启动翻译阶段 | refusal 被记录为 ToolRunLog + WorkflowAttempt + QualityIssue + WorkflowDecision；UI 提示 fallback/manual/block。 |
+| AV-006 | Export gate | 手工插入 open blocking QualityIssue | 执行 Page export | ExportRecord blocked；不生成正常 export artifact。 |
+| AV-007 | Warning export | 仅存在 warning issue | 使用 allow_warning_export true/false 的两个 profile | true 时 succeeded_with_warnings；false 时 blocked 或 rejected。 |
+| AV-008 | Idempotency | 已存在同 hash OCR/translation 结果 | 重跑同一 Page | 记录 reused_cached，不重复调用对应 Provider。 |
+| AV-009 | OCR edit stale propagation | 已有 active OCR/translation/typeset | 修改 OCR | 新 OCRResult active；translation/check/typesetting stale；Page context stale。 |
+| AV-010 | Translation edit stale propagation | 已有 active translation/typeset | 修改译文 | 新 TranslationResult active；typesetting stale；旧译文保留。 |
+| AV-011 | API key missing | 未配置云端 Provider secret | 启动需要云端翻译的 profile | Provider unavailable；系统不崩溃；Project 浏览和本地功能可用。 |
+| AV-012 | Local provider replacement | 配置本地 OpenAI-compatible endpoint | 切换 TranslationProvider | Workflow 和 API 不改动，仅 ProviderConfig/Profile 改动。 |
+
+### 22.3 FakeProvider 策略
+
+MVP 实现初期必须先使用 FakeProvider 跑通 workflow，不应直接把真实 OCR/LLM/清字工具接入作为第一步。
+
+FakeProvider 应支持：
+
+1. 固定成功输出；
+2. 空输出；
+3. invalid JSON；
+4. provider_timeout；
+5. provider_refusal；
+6. partial translation output；
+7. typeset_overflow；
+8. cleaning_complex_background；
+9. 可配置调用计数，用于验证 idempotency。
+
+### 22.4 真实工具 Spike 验证边界
+
+真实工具 Spike 的目标不是实现完整产品质量，而是回答架构可行性问题：
+
+1. Detector 输出能否转为 TextBlock geometry；
+2. manga-ocr / PaddleOCR 输出能否转为 OCRResult；
+3. OpenAI-compatible Provider 是否能稳定返回结构化 JSON；
+4. 翻译质量检查是否能捕获空译文、缺块、术语不一致、长度风险和拒绝文本；
+5. simple fill / OpenCV inpaint 是否能生成可追踪 cleaned artifact；
+6. Pillow typesetter 是否能生成 active typeset artifact 并检测 overflow；
+7. 中断恢复是否能跳过已完成步骤。
+
+### 22.5 架构验证退出标准
+
+进入大规模功能实现前，至少满足：
+
+1. AV-001 到 AV-006 通过；
+2. FakeProvider 可以覆盖 retry/fallback/warning/block；
+3. Crash recovery 至少覆盖 OCR 后中断和 Provider 调用失败后中断；
+4. Export gate 能稳定阻止 open blocking issue；
+5. ArtifactService 能正确处理 present、missing、moved_to_trash；
+6. Provider Adapter 无数据库访问和正式 artifact 登记；
+7. 单 Page 垂直切片可以在无真实 Provider 的情况下完成。
+
+---
+
+## 23. HLD 到详细设计的追踪矩阵
+
+| HLD 主题 | 对应详细设计 | 最小输出 |
+| --- | --- | --- |
+| 应用形态与部署 | `docs/design/runtime/` | 启动流程、端口策略、workspace 初始化、桌面化边界。 |
+| 分层与模块 | `docs/design/backend-architecture/` | 包结构、依赖规则、service/repository/provider interface。 |
+| Workflow Loop | `docs/design/workflow-state/` | 状态转移表、attempt/decision 语义、retry budget、recovery algorithm。 |
+| Quality Gate | `docs/design/execution-contract/` | MVP-0 IssueType taxonomy、severity/blocking matrix、message/action keys；完整 UI 文案后置。 |
+| Provider Adapter | `docs/design/execution-contract/` | 五类 Provider interface、DTO、capability metadata、错误/refusal 映射。 |
+| ArtifactService | `docs/design/execution-contract/` | MVP-0 official artifact lifecycle、storage_state、temp promotion、missing 检测；完整 cleanup scheduler 后置。 |
+| Storage | `docs/design/data-model/` + `docs/design/persistence/` | Data model、schema outline、Repository/UoW、migration readiness。 |
+| API Layer | `docs/design/api/` | route、request/response DTO、error response、stream/polling 策略。 |
+| UI | `docs/design/ui-flow/` | Project、Upload、Processing、Review、QualityReport、Export 页面流。 |
+| Security / Config | `docs/design/config-security/` | secret_ref、API key 保存、日志脱敏、debug artifact 提示。 |
+| Export | `docs/design/export/` | 后续实际 ExportRecord、manifest schema、warning export、blocked export 行为；MVP-0 FakeProvider 当前只做到 `ready_for_export`。 |
+| Testing | `docs/implementation/mvp0-fakeprovider-slice/` | FakeProvider、crash recovery、export readiness gate、artifact lifecycle 的切片级验证命令。 |
+
+---
+
+## 24. HLD v0.2 当前结论
+
+HLD v0.2 的结论是：
+
+```text
+当前体系结构可以作为 MVP 详细设计与实现基线。
+```
+
+该结论成立的原因：
+
+1. 应用形态、部署边界和技术栈已经明确；
+2. 系统分层、核心模块职责和依赖规则已经明确；
+3. Workflow Loop + Quality Gate + Artifact Traceability + Restart Recovery 是主架构机制；
+4. Provider Adapter、ArtifactService、Repository / DAO、QualityCheckService、WorkflowLoopEngine 的职责边界已经足够清晰；
+5. 数据模型详细设计 v0.1 已经反向验证并细化了 HLD 中的核心状态、artifact、workflow、quality 和 export 机制；
+6. HLD v0.2 已补充架构视图、ADR 索引、质量属性场景和架构验证计划。
+
+后续不应继续扩大 HLD 正文规模。新的工作应优先进入详细设计和架构验证实现。

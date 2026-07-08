@@ -93,7 +93,7 @@ Required checks:
 * `docs/design/workflow-state/HARNESS.md` exists and is non-empty.
 * `docs/design/workflow-state/PLAN.md` exists and is non-empty.
 * `docs/SRS-v1.0.md` exists.
-* `docs/HLD.md` or `docs/HLD-v0.2.md` exists.
+* `docs/HLD.md` exists.
 * `docs/design/data-model/final/data-model-dd-v0.1.md` exists.
 * `docs/design/data-model/final/state-data-impact.md` exists.
 
@@ -310,7 +310,7 @@ The reviewer must read:
 
 * `AGENTS.md`
 * `docs/SRS-v1.0.md`
-* `docs/HLD.md` or `docs/HLD-v0.2.md`
+* `docs/HLD.md`
 * `docs/PROJECT-PLAN.md`
 * `docs/design/workflow-state/GOAL.md`
 * `docs/design/workflow-state/HARNESS.md`
@@ -413,7 +413,7 @@ The synthesizer must read:
 
 * `AGENTS.md`
 * `docs/SRS-v1.0.md`
-* `docs/HLD.md` or `docs/HLD-v0.2.md`
+* `docs/HLD.md`
 * `docs/PROJECT-PLAN.md`
 * `docs/design/workflow-state/GOAL.md`
 * `docs/design/workflow-state/HARNESS.md`

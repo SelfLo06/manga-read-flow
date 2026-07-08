@@ -39,7 +39,7 @@ Read and synthesized:
 - `docs/design/workflow-state/final/recovery-rules.md`
 - `docs/design/workflow-state/final/stale-propagation-rules.md`
 
-No blocking conflict was found. `docs/HLD.md` is the HLD source present in this repository; `docs/HLD-v0.2.md` was referenced by planning/proposal text but is not present. The final design follows `docs/HLD.md` plus the newer data-model and workflow-state final documents where older SRS/HLD examples use broader vocabulary.
+No blocking conflict was found. `docs/HLD.md` is now the current HLD v0.2 baseline. The final design follows `docs/HLD.md` plus the newer data-model and workflow-state final documents where older SRS/HLD examples use broader vocabulary.
 
 ## 3. Final document map
 

@@ -27,7 +27,7 @@ The bias is against a generic workflow engine. A small stage vocabulary plus cle
 
 # 3. Assumptions
 
-- `docs/HLD-v0.2.md` is treated as the stronger HLD baseline because it explicitly incorporates the data-model v0.1 feedback, while remaining consistent with `docs/HLD.md` at the architecture level.
+- `docs/HLD.md` is treated as the current HLD baseline because it explicitly incorporates the data-model v0.1 feedback while preserving the architecture direction.
 - The source documents contain non-blocking vocabulary drift:
   - SRS Page status uses `translation_done`, while HLD v0.2 uses `translated`.
   - SRS TextBlock stage status includes `user_edited`; HLD v0.2 and the data-model final documents model user edits through versioned result rows, active pointers, and stale propagation instead.

@@ -27,7 +27,7 @@ Rejected alternatives:
 
 - `AGENTS.md`: minimal-change mode, Project isolation, `app.db + project.db`, no image BLOBs, no unrelated files.
 - `docs/SRS-v1.0.md`: Project, Batch, Page, task recovery, original image safety, SQLite plus filesystem.
-- `docs/HLD.md` and `docs/HLD-v0.2.md`: local Web UI/FastAPI/backend architecture, SQLite/workspace storage, repository boundary.
+- `docs/HLD.md`: local Web UI/FastAPI/backend architecture, SQLite/workspace storage, repository boundary.
 - `docs/PROJECT-PLAN.md`: Phase 4 MVP-0 single Page backend vertical slice.
 - `docs/design/data-model/final/data-model-dd-v0.1.md`: `app.db` and `project.db` split, `ProjectMetadata`, migration ledgers.
 - `docs/design/persistence/final/persistence-readiness-dd-v0.1.md`: Project store gate, immediate app/project tables.
@@ -118,7 +118,7 @@ Source documents:
 - AGENTS.md
 - docs/SRS-v1.0.md
 - docs/HLD.md
-- docs/HLD-v0.2.md
+- docs/HLD.md
 - docs/PROJECT-PLAN.md
 - docs/design/data-model/final/data-model-dd-v0.1.md
 - docs/design/persistence/final/persistence-readiness-dd-v0.1.md

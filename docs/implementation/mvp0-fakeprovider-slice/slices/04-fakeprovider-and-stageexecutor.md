@@ -125,7 +125,7 @@ Source documents:
 - AGENTS.md
 - docs/SRS-v1.0.md
 - docs/HLD.md
-- docs/HLD-v0.2.md
+- docs/HLD.md
 - docs/design/execution-contract/final/provider-adapter-contract.md
 - docs/design/execution-contract/final/stage-executor-contract.md
 - docs/design/execution-contract/final/fakeprovider-readiness.md

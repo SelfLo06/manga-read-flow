@@ -24,7 +24,7 @@ Design posture:
 
 | Assumption | Rationale |
 | --- | --- |
-| `docs/HLD-v0.2.md` is the preferred HLD baseline when it adds detail beyond `docs/HLD.md`. | User prompt allows `HLD-v0.2.md` if present; PROJECT-PLAN names it as current baseline. |
+| `docs/HLD.md` is the preferred HLD baseline. | Project plan names it as the current architecture baseline. |
 | `processing_artifacts.storage_state` vocabulary from data-model final is authoritative for MVP. | It already includes `present`, `metadata_only_cleaned`, `moved_to_trash`, `missing`, `deleted`. |
 | Recovery rules are the tie-breaker for crash/orphan behavior. | They are newer and task-specific for workflow recovery. |
 | Apparent tension is non-blocking: data model says recovery may scan temp/orphan files and register or clean; recovery-rules says MVP treats unregistered output as `abandoned_after_crash` unless normal validation is replayed. | Resolve by allowing scan/report/quarantine, but no active official promotion unless the normal validation + ArtifactService registration + QualityCheck + WorkflowLoopEngine acceptance path is explicitly replayed. |

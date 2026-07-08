@@ -45,19 +45,23 @@
 | 文档 | 状态 | 用途 |
 | --- | --- | --- |
 | `docs/SRS-v1.0.md` | 已形成正式需求基线 | 定义系统目标、范围、P0/P1/P2、外部依赖、MVP 验收标准。 |
-| `docs/HLD.md` 或当前 `HLD-v0.2.md` | 已接受为详细设计与 MVP 实现基线 | 定义应用形态、总体架构、模块边界、Workflow Loop、Quality Gate、Provider Adapter、ArtifactService 等。 |
+| `docs/HLD.md` | 已接受为详细设计与 MVP 实现基线 | 原 `HLD-v0.2` 已提升为稳定入口，定义应用形态、总体架构、模块边界、Workflow Loop、Quality Gate、Provider Adapter、ArtifactService 等。 |
 | `docs/design/data-model/final/data-model-dd-v0.1.md` | 已形成数据模型详细设计基线 | 定义 app.db/project.db、核心实体、active pointer、WorkflowAttempt、QualityIssue、Artifact 等数据边界。 |
 | `docs/design/data-model/final/schema-outline.md` | 已形成 schema outline | 作为后续 ORM / migration / repository 设计输入。 |
 | `docs/design/data-model/final/state-data-impact.md` | 已形成状态数据影响说明 | 说明 OCR edit、Translation edit、Provider refusal、Cleaning skip、Typesetting overflow、Crash recovery、Export blocking 的数据影响。 |
-| `docs/design/data-model/final/open-questions.md` | 已形成非阻塞问题清单 | 记录 enum、ID、retention、warning export 等后续设计问题。 |
+| `docs/design/workflow-state/final/workflow-state-dd-v0.1.md` | 已形成 Workflow State 详细设计基线 | 定义状态词汇、阶段转移、决策矩阵、恢复规则、stale 传播。 |
+| `docs/design/execution-contract/final/execution-contract-dd-v0.1.md` | 已形成 Execution Contract 详细设计基线 | 定义 Provider Adapter、ArtifactService、QualityCheckService、StageExecutor 和 FakeProvider 最小契约。 |
+| `docs/design/persistence/final/persistence-readiness-dd-v0.1.md` | 已形成 Persistence Readiness 设计基线 | 定义 Repository / DAO、Unit of Work、migration、recovery 和 idempotency 实现准备。 |
+| `docs/implementation/mvp0-fakeprovider-slice/PLAN.md` | 已形成 MVP-0 FakeProvider 实施计划 | 将首个后端实现拆为 7 个小切片，并给出验证命令与 Codex task prompt。 |
 
 当前状态判断：
 
 ```text
 需求基线已完成。
-体系结构设计已完成到 v0.2，可作为详细设计与实现基线。
-数据模型详细设计已完成到 v0.1。
-下一步应并行推进：Workflow State / Workflow Loop 详细设计 + 工具 Spike。
+体系结构设计已完成到 HLD v0.2，并已提升为 docs/HLD.md。
+MVP-0 所需核心详细设计已完成：Data Model、Workflow State、Execution Contract、Persistence Readiness。
+MVP-0 FakeProvider 单 Page 后端实施计划已完成。
+下一步应启动 MVP-0 FakeProvider Slice 01：Foundation and Project Store。
 ```
 
 ---
@@ -132,9 +136,9 @@
 | --- | --- | --- | --- |
 | Phase 0 | 项目治理与文档基线 | 建立 AGENTS、文档结构、ADR、协作规则 | 基本完成，后续维护 |
 | Phase 1 | 需求与架构基线 | SRS 和 HLD 定版，形成实现方向 | 已完成 |
-| Phase 2 | 核心详细设计 | 数据模型、状态机、Provider、Artifact、Quality、API 等详细设计 | 进行中，数据模型已完成 |
-| Phase 3 | 架构验证与工具 Spike | 用 FakeProvider 和真实工具验证高风险点 | 待启动 |
-| Phase 4 | MVP-0 单 Page 后端垂直切片 | CLI / 后端方式跑通一页端到端 | 待启动 |
+| Phase 2 | 核心详细设计 | 数据模型、状态机、Provider、Artifact、Quality、API 等详细设计 | MVP-0 前置设计已完成；API/UI/Export 详细设计后置 |
+| Phase 3 | 架构验证与工具 Spike | 用 FakeProvider 和真实工具验证高风险点 | FakeProvider 验证计划已完成，Slice 01 待启动 |
+| Phase 4 | MVP-0 单 Page 后端垂直切片 | CLI / 后端方式跑通一页端到端 | 已具备实施计划，代码未启动 |
 | Phase 5 | MVP-1 单 Page Web 闭环 | 本地 Web UI 支持单页上传、处理、预览、返工、导出 | 待启动 |
 | Phase 6 | MVP-2 Batch / Recovery / Review / Export | 多页批次、中断恢复、局部返工、ZIP 导出 | 待启动 |
 | Phase 7 | 稳定化测试与质量收敛 | 样本回归、错误提示、日志清理、性能修正 | 待启动 |
@@ -203,7 +207,7 @@ docs/adr/
 ### 6.3 输出
 
 1. `docs/SRS-v1.0.md`；
-2. `docs/HLD.md` 或当前 `HLD-v0.2.md`；
+2. `docs/HLD.md`；
 3. 架构 ADR 初始清单。
 
 ### 6.4 主要工作
@@ -220,7 +224,7 @@ docs/adr/
 ### 6.5 退出标准
 
 1. SRS v1.0 可作为需求基线；
-2. HLD v0.2 可作为详细设计与实现基线；
+2. HLD v0.2 已提升为 `docs/HLD.md`，可作为详细设计与实现基线；
 3. 无阻塞性需求问题；
 4. P0/P1/P2/P3 范围明确；
 5. MVP 第一阶段验收标准明确。
@@ -237,24 +241,25 @@ docs/adr/
 
 已完成：
 
-1. 数据模型详细设计 v0.1；
-2. schema outline；
-3. state-data-impact；
-4. data-model open questions。
+1. Data Model 详细设计 v0.1；
+2. Workflow State / Workflow Loop 详细设计 v0.1；
+3. Execution Contract 详细设计 v0.1，覆盖 Provider Adapter、ArtifactService、QualityCheckService、StageExecutor 和 FakeProvider 最小契约；
+4. Persistence Readiness 详细设计 v0.1；
+5. MVP-0 FakeProvider Single-Page Backend Slice 实施计划。
 
 ### 7.3 后续详细设计顺序
 
 | 顺序 | 设计项 | 输出目录 | 说明 |
 | --- | --- | --- | --- |
-| 1 | Workflow State / Workflow Loop 详细设计 | `docs/design/workflow-state/` | 状态转移、retry budget、恢复规则、stale 传播、pause/cancel/recover。 |
-| 2 | QualityCheckService / IssueType 详细设计 | `docs/design/quality-check/` | 检查规则、IssueType、severity、blocking、root_stage、用户提示。 |
-| 3 | Provider Adapter 接口设计 | `docs/design/provider-adapter/` | Detector/OCR/Translation/Cleaner/Typesetter 输入输出、错误规范、capability metadata。 |
-| 4 | ArtifactService 详细设计 | `docs/design/artifact-service/` | 目录布局、原子写入、hash、retention、trash、missing、debug artifact。 |
-| 5 | ProcessingProfile 详细设计 | `docs/design/processing-profile/` | fast/balanced/strict、自定义 profile、snapshot、retry budgets。 |
-| 6 | Repository / ORM / Migration 设计 | `docs/design/persistence/` | SQLAlchemy、Alembic、Repository、事务边界。 |
-| 7 | API 设计 | `docs/design/api/` | Project/Batch/Page/TextBlock/Task/Review/Export 路由与 DTO。 |
-| 8 | UI Flow 设计 | `docs/design/ui/` | Project 列表、上传、处理配置、进度、质量报告、review、导出。 |
-| 9 | 测试设计 | `docs/design/testing/` | FakeProvider、集成测试、E2E、样本回归、手工验收。 |
+| 1 | Data Model 详细设计 | `docs/design/data-model/` | 已完成 v0.1。 |
+| 2 | Workflow State / Workflow Loop 详细设计 | `docs/design/workflow-state/` | 已完成 v0.1。 |
+| 3 | Execution Contract 详细设计 | `docs/design/execution-contract/` | 已完成 v0.1，覆盖 MVP-0 所需 Provider、Artifact、Quality、StageExecutor 契约。 |
+| 4 | Repository / ORM / Migration 最小设计 | `docs/design/persistence/` | 已完成 Persistence Readiness v0.1。 |
+| 5 | MVP-0 FakeProvider 实施计划 | `docs/implementation/mvp0-fakeprovider-slice/` | 已完成 7 个实现切片、review、checklist 和 Codex task template。 |
+| 6 | API 设计 | `docs/design/api/` | MVP-1 前需要。 |
+| 7 | UI Flow 设计 | `docs/design/ui/` | MVP-1 前需要。 |
+| 8 | Export 设计 | `docs/design/export/` | 实际导出图片、ZIP、manifest、ExportRecord 行为后置。 |
+| 9 | 真实工具 Spike | `docs/research/` 或后续 spike 目录 | Detection/OCR、Translation JSON、Cleaning、Typesetting 真实工具验证。 |
 
 ### 7.4 退出标准
 
@@ -345,16 +350,18 @@ FakeProvider 单 Page 垂直切片
 8. QualityIssue 创建；
 9. WorkflowAttempt / WorkflowDecision；
 10. Cleaning / Typesetting artifact；
-11. ExportRecord；
+11. export readiness / `export_check`，达到 `ready_for_export` 或明确 warning/block 状态；
 12. CLI 或脚本触发。
 
 ### 9.3 不包含
 
 1. 完整 Web UI；
-2. 多页 Batch；
-3. 高级设置页；
-4. 桌面化；
-5. P1/P2 能力。
+2. FastAPI route 设计与实现；
+3. 多页 Batch；
+4. 高级设置页；
+5. 实际导出图片、ZIP、manifest 或 `ExportRecord`；
+6. 桌面化；
+7. P1/P2 能力。
 
 ### 9.4 退出标准
 
@@ -581,15 +588,16 @@ P1/P2 必须遵守：
 | 设计项 | 状态 | 是否阻塞 MVP-0 | 备注 |
 | --- | --- | --- | --- |
 | Data Model | 已完成 v0.1 | 否 | 已可作为后续输入。 |
-| Workflow State / Loop | 待做 | 是 | MVP-0 前必须完成。 |
-| QualityCheckService / IssueType | 待做 | 是 | MVP-0 前至少完成 P0 规则。 |
-| Provider Adapter Interface | 待做 | 是 | MVP-0 前必须定义接口。 |
-| ArtifactService | 待做 | 是 | MVP-0 前必须定义目录、原子写、hash、retention。 |
-| ProcessingProfile | 待做 | 是 | 至少定义 fast/balanced/strict 和 snapshot。 |
-| Repository / ORM / Migration | 待做 | 是 | MVP-0 实现前需要。 |
+| Workflow State / Loop | 已完成 v0.1 | 否 | 状态词汇、阶段转移、决策矩阵、恢复和 stale 传播已定义。 |
+| QualityCheckService / IssueType | MVP-0 最小契约已完成 | 否 | Execution Contract 覆盖 P0 issue taxonomy、severity、blocking、root_stage。 |
+| Provider Adapter Interface | MVP-0 最小契约已完成 | 否 | Execution Contract 覆盖 ProviderResult、错误/refusal、FakeProvider modes。 |
+| ArtifactService | MVP-0 最小契约已完成 | 否 | Execution Contract 覆盖 official artifact lifecycle、storage_state、temp promotion、missing 检测。 |
+| ProcessingProfile | Snapshot 语义已覆盖 | 否 | Data Model / Workflow State / Persistence 覆盖 MVP-0 所需 snapshot 和 retry budget 输入；完整 UI/config 后置。 |
+| Repository / ORM / Migration | Persistence Readiness 已完成 v0.1 | 否 | Repository/UoW/migration 最小设计已可支持 FakeProvider slice。 |
+| MVP-0 实施计划 | 已完成 | 否 | 下一步为 Slice 01：Foundation and Project Store。 |
 | API | 待做 | 阶段性 | MVP-1 前需要。 |
 | UI Flow | 待做 | 阶段性 | MVP-1 前需要。 |
-| Testing Design | 待做 | 是 | FakeProvider 和 recovery 测试必须先有。 |
+| Export Design | 待做 | 阶段性 | 实际 ExportRecord、ZIP、manifest 后置到 export milestone。 |
 
 ---
 

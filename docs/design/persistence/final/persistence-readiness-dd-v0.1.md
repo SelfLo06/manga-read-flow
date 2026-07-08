@@ -27,7 +27,7 @@ Read and synthesized:
 - `AGENTS.md`
 - `docs/SRS-v1.0.md`
 - `docs/HLD.md`
-- `docs/HLD-v0.2.md`
+- `docs/HLD.md`
 - `docs/PROJECT-PLAN.md`
 - `docs/design/persistence/GOAL.md`
 - `docs/design/persistence/HARNESS.md`
@@ -52,9 +52,9 @@ Read and synthesized:
 
 Baseline decision:
 
-- Use `docs/HLD-v0.2.md` plus the data-model, workflow-state, and execution-contract final documents as the current baseline.
-- `docs/HLD.md` remains the older HLD reference.
-- The execution-contract final noted that `HLD-v0.2.md` was absent at its synthesis time. It is present now, and this persistence design follows `HLD-v0.2.md` where it reconciles active pointers, artifact ownership, export gate, provider refusal, and recovery.
+- Use `docs/HLD.md` plus the data-model, workflow-state, and execution-contract final documents as the current baseline.
+- `docs/HLD.md` is now the promoted HLD v0.2 baseline.
+- The execution-contract final originally noted that the v0.2 HLD path was absent at its synthesis time; this has since been reconciled, and the current baseline is the promoted `docs/HLD.md`.
 
 ## 3. Software Engineering Principle Application
 

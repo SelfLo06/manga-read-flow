@@ -23,7 +23,7 @@ As the Migration and Database Lifecycle agent, I bias toward:
 
 ## 3. Assumptions
 
-- `docs/HLD.md` is the HLD source used for this proposal. `docs/HLD-v0.2.md` was not needed because the prompt allows either HLD path and `AGENTS.md` names `docs/HLD.md`.
+- `docs/HLD.md` is the HLD source used for this proposal.
 - Older SRS/HLD examples that show direct file path fields or active flags are superseded by the final data-model documents: artifact metadata lives in `ProcessingArtifact`, and active selection uses owner pointers.
 - `app.db` stores the Project registry, global non-secret settings, provider config metadata, processing profile templates, and its own migration ledger.
 - Each `project.db` stores one Project's content, workflow state, artifacts metadata, quality issues, result versions, profile snapshots, export records, `ProjectMetadata`, and its own migration ledger.
