@@ -223,3 +223,8 @@ AGENTS.md
 
 # Local sample images
 local_samples/
+
+# Synthetic sample spike outputs
+tools/generate_synthetic_samples.py
+tests/unit/test_generate_synthetic_samples.py
+tests/fixtures/synthetic/
