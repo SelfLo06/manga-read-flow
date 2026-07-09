@@ -37,8 +37,28 @@ class TextBlockSnapshot:
     reading_order: int
     active_ocr_result_id: str | None
     active_translation_result_id: str | None
+    detection_status: str
     ocr_status: str
     translation_status: str
+    translation_check_status: str
+    cleaning_status: str
+    typesetting_status: str
+
+
+@dataclass(frozen=True)
+class ActiveOcrInput:
+    text_block_id: str
+    active_ocr_result_id: str | None
+    source_text: str | None
+    source_text_hash: str | None
+
+
+@dataclass(frozen=True)
+class ActiveTranslationInput:
+    text_block_id: str
+    active_translation_result_id: str | None
+    translation_text: str | None
+    translation_text_hash: str | None
 
 
 @dataclass(frozen=True)
@@ -121,6 +141,7 @@ class ContentStateRepository:
                     project_id,
                     page_id,
                     reading_order,
+                    detection_status,
                     ocr_status,
                     translation_status,
                     translation_check_status,
@@ -130,13 +151,14 @@ class ContentStateRepository:
                     created_at,
                     updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     text_block_id,
                     self._project_id,
                     page_id,
                     reading_order,
+                    "done",
                     ocr_status,
                     translation_status,
                     "pending",
@@ -148,6 +170,26 @@ class ContentStateRepository:
                 ),
             )
             return _load_text_block(connection, self._project_id, text_block_id)
+
+    def get_page(self, page_id: str) -> PageSnapshot:
+        with connect_existing(self._project_db_path) as connection:
+            return _load_page(connection, self._project_id, page_id)
+
+    def list_text_blocks_for_page(self, page_id: str) -> tuple[TextBlockSnapshot, ...]:
+        with connect_existing(self._project_db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT text_block_id
+                FROM text_blocks
+                WHERE project_id = ? AND page_id = ?
+                ORDER BY reading_order
+                """,
+                (self._project_id, page_id),
+            ).fetchall()
+            return tuple(
+                _load_text_block(connection, self._project_id, row["text_block_id"])
+                for row in rows
+            )
 
     def import_page_original(
         self,
@@ -260,6 +302,65 @@ class ResultVersionRepository:
             block = _load_text_block(connection, self._project_id, text_block_id)
         return block.active_ocr_result_id, block.active_translation_result_id
 
+    def active_ocr_inputs_for_page(self, page_id: str) -> tuple[ActiveOcrInput, ...]:
+        with connect_existing(self._project_db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    tb.text_block_id,
+                    tb.active_ocr_result_id,
+                    ocr.source_text,
+                    ocr.source_text_hash
+                FROM text_blocks tb
+                LEFT JOIN ocr_results ocr
+                    ON ocr.project_id = tb.project_id
+                    AND ocr.ocr_result_id = tb.active_ocr_result_id
+                WHERE tb.project_id = ? AND tb.page_id = ?
+                ORDER BY tb.reading_order
+                """,
+                (self._project_id, page_id),
+            ).fetchall()
+        return tuple(
+            ActiveOcrInput(
+                text_block_id=row["text_block_id"],
+                active_ocr_result_id=row["active_ocr_result_id"],
+                source_text=row["source_text"],
+                source_text_hash=row["source_text_hash"],
+            )
+            for row in rows
+        )
+
+    def active_translation_inputs_for_page(
+        self,
+        page_id: str,
+    ) -> tuple[ActiveTranslationInput, ...]:
+        with connect_existing(self._project_db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    tb.text_block_id,
+                    tb.active_translation_result_id,
+                    tr.translation_text,
+                    tr.translation_text_hash
+                FROM text_blocks tb
+                LEFT JOIN translation_results tr
+                    ON tr.project_id = tb.project_id
+                    AND tr.translation_result_id = tb.active_translation_result_id
+                WHERE tb.project_id = ? AND tb.page_id = ?
+                ORDER BY tb.reading_order
+                """,
+                (self._project_id, page_id),
+            ).fetchall()
+        return tuple(
+            ActiveTranslationInput(
+                text_block_id=row["text_block_id"],
+                active_translation_result_id=row["active_translation_result_id"],
+                translation_text=row["translation_text"],
+                translation_text_hash=row["translation_text_hash"],
+            )
+            for row in rows
+        )
+
 
 class GlossaryRepository:
     def __init__(self, *, project_db_path: Path, project_id: str) -> None:
@@ -347,6 +448,12 @@ def initialize_content_state_schema(connection: sqlite3.Connection) -> None:
             project_id TEXT NOT NULL,
             page_id TEXT NOT NULL,
             reading_order INTEGER NOT NULL,
+            detection_status TEXT NOT NULL,
+            bbox_json TEXT,
+            polygon_json TEXT,
+            geometry_hash TEXT,
+            detection_provider TEXT,
+            detection_confidence REAL,
             active_ocr_result_id TEXT,
             active_translation_result_id TEXT,
             ocr_status TEXT NOT NULL,
@@ -366,7 +473,14 @@ def initialize_content_state_schema(connection: sqlite3.Connection) -> None:
             ocr_result_id TEXT PRIMARY KEY,
             project_id TEXT NOT NULL,
             text_block_id TEXT NOT NULL,
+            version_number INTEGER NOT NULL,
             source_type TEXT NOT NULL,
+            source_text TEXT,
+            source_text_hash TEXT,
+            provider_name TEXT,
+            model_id TEXT,
+            workflow_attempt_id TEXT,
+            tool_run_id TEXT,
             created_at TEXT NOT NULL
         )
         """
@@ -377,7 +491,17 @@ def initialize_content_state_schema(connection: sqlite3.Connection) -> None:
             translation_result_id TEXT PRIMARY KEY,
             project_id TEXT NOT NULL,
             text_block_id TEXT NOT NULL,
+            version_number INTEGER NOT NULL,
             source_type TEXT NOT NULL,
+            source_ocr_result_id TEXT,
+            source_text_hash TEXT,
+            translation_text TEXT,
+            translation_text_hash TEXT,
+            glossary_version_id TEXT,
+            provider_name TEXT,
+            model_id TEXT,
+            workflow_attempt_id TEXT,
+            tool_run_id TEXT,
             created_at TEXT NOT NULL
         )
         """
@@ -479,8 +603,12 @@ def _load_text_block(
             reading_order,
             active_ocr_result_id,
             active_translation_result_id,
+            detection_status,
             ocr_status,
-            translation_status
+            translation_status,
+            translation_check_status,
+            cleaning_status,
+            typesetting_status
         FROM text_blocks
         WHERE project_id = ? AND text_block_id = ?
         """,
@@ -494,6 +622,10 @@ def _load_text_block(
         reading_order=row["reading_order"],
         active_ocr_result_id=row["active_ocr_result_id"],
         active_translation_result_id=row["active_translation_result_id"],
+        detection_status=row["detection_status"],
         ocr_status=row["ocr_status"],
         translation_status=row["translation_status"],
+        translation_check_status=row["translation_check_status"],
+        cleaning_status=row["cleaning_status"],
+        typesetting_status=row["typesetting_status"],
     )

@@ -112,6 +112,95 @@ class ArtifactService:
             )
         )
 
+    def register_stage_output(
+        self,
+        *,
+        temp_path: Path | str,
+        batch_id: str | None,
+        page_id: str | None,
+        owner_type: str,
+        owner_id: str,
+        artifact_type: str,
+        source_stage: str,
+        media_type: str | None = None,
+        retention_class: str = "stage_output",
+        safety: ArtifactSafetyMetadata | None = None,
+    ) -> ProcessingArtifactSnapshot:
+        source = Path(temp_path)
+        if not source.is_file():
+            raise ArtifactRegistrationError("Stage output temp file is not available.")
+
+        suffix = source.suffix.lower()
+        expected_mime_type = media_type or self._ALLOWED_MEDIA_TYPES.get(suffix)
+        if expected_mime_type is None or expected_mime_type not in set(
+            self._ALLOWED_MEDIA_TYPES.values()
+        ):
+            raise ArtifactRegistrationError(
+                f"Unsupported stage output media type: {expected_mime_type or '<none>'}"
+            )
+
+        _inspect_image(source, expected_mime_type)
+        artifact_id = f"artifact-{uuid4()}"
+        relative_path = self._stage_relative_path(
+            artifact_id=artifact_id,
+            artifact_type=artifact_type,
+            source_stage=source_stage,
+            suffix=suffix,
+        )
+        destination = self._resolve_project_relative_path(relative_path)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        _copy_without_overwrite(source, destination)
+        try:
+            inspection = _inspect_image(destination, expected_mime_type)
+        except ArtifactRegistrationError:
+            destination.unlink(missing_ok=True)
+            raise
+
+        return self._artifact_repository.register_artifact(
+            RegisterArtifactMetadata(
+                artifact_id=artifact_id,
+                batch_id=batch_id,
+                page_id=page_id,
+                owner_type=owner_type,
+                owner_id=owner_id,
+                artifact_type=artifact_type,
+                source_stage=source_stage,
+                relative_path=relative_path,
+                file_hash=_sha256_file(destination),
+                hash_algorithm="sha256",
+                byte_size=destination.stat().st_size,
+                mime_type=inspection.mime_type,
+                width=inspection.width,
+                height=inspection.height,
+                retention_class=retention_class,
+                storage_state="present",
+                safety=safety or ArtifactSafetyMetadata(),
+            )
+        )
+
+    def register_stage_image(
+        self,
+        *,
+        source_path: Path | str,
+        batch_id: str,
+        page_id: str,
+        stage: str,
+        artifact_type: str,
+        retention_class: str,
+        safety: ArtifactSafetyMetadata,
+    ) -> ProcessingArtifactSnapshot:
+        return self.register_stage_output(
+            temp_path=source_path,
+            batch_id=batch_id,
+            page_id=page_id,
+            owner_type="page",
+            owner_id=page_id,
+            artifact_type=artifact_type,
+            source_stage=stage,
+            retention_class=retention_class,
+            safety=safety,
+        )
+
     def validate_artifact(
         self,
         artifact_id: str,
@@ -193,6 +282,23 @@ class ArtifactService:
         suffix = Path(original_filename).suffix.lower()
         stem = _safe_stem(Path(original_filename).stem)
         path = PurePosixPath("originals", f"{stem}-{artifact_id}{suffix}")
+        return path.as_posix()
+
+    def _stage_relative_path(
+        self,
+        *,
+        artifact_id: str,
+        artifact_type: str,
+        source_stage: str,
+        suffix: str,
+    ) -> str:
+        safe_stage = _safe_stem(source_stage)
+        safe_artifact_type = _safe_stem(artifact_type)
+        path = PurePosixPath(
+            "artifacts",
+            safe_stage,
+            f"{safe_artifact_type}-{artifact_id}{suffix}",
+        )
         return path.as_posix()
 
     def _resolve_project_relative_path(self, relative_path: str) -> Path:

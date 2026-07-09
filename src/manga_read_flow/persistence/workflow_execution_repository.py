@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
 import sqlite3
 
@@ -18,14 +19,36 @@ class ProcessingTaskSnapshot:
     task_type: str
     status: str
     current_stage: str
+    profile_snapshot_id: str | None = None
+
+    @property
+    def task_status(self) -> str:
+        return self.status
+
+    @property
+    def page_id(self) -> str | None:
+        return self.target_id if self.target_type == "page" else None
+
+
+@dataclass(frozen=True)
+class ProcessingProfileSnapshot:
+    profile_snapshot_id: str
+    settings_json: str
+    settings_hash: str
 
 
 @dataclass(frozen=True)
 class ReadinessSnapshot:
-    task_id: str
-    task_status: str
-    current_stage: str
-    page_id: str | None
+    page_id: str
+    active_typeset_artifact_id: str | None
+    active_typeset_artifact_type: str | None
+    active_typeset_storage_state: str | None
+    open_blocking_issue_count: int
+    unresolved_warning_issue_count: int
+    skipped_text_block_count: int
+    incomplete_text_block_count: int
+    allow_warning_export: bool
+    unresolved_issue_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -128,6 +151,7 @@ class WorkflowExecutionRepository:
         task_type: str,
         status: str,
         current_stage: str,
+        profile_snapshot_id: str | None = None,
     ) -> ProcessingTaskSnapshot:
         now = utc_now()
         with connect_existing(self._project_db_path) as connection:
@@ -141,13 +165,14 @@ class WorkflowExecutionRepository:
                     task_type,
                     status,
                     current_stage,
+                    profile_snapshot_id,
                     progress_state,
                     retry_budget_json,
                     heartbeat_at,
                     created_at,
                     updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     task_id,
@@ -157,6 +182,7 @@ class WorkflowExecutionRepository:
                     task_type,
                     status,
                     current_stage,
+                    profile_snapshot_id,
                     "created",
                     "{}",
                     None,
@@ -165,6 +191,68 @@ class WorkflowExecutionRepository:
                 ),
             )
             return _load_task(connection, self._project_id, task_id)
+
+    def get_task(self, task_id: str) -> ProcessingTaskSnapshot:
+        with connect_existing(self._project_db_path) as connection:
+            return _load_task(connection, self._project_id, task_id)
+
+    def ensure_profile_snapshot(
+        self,
+        *,
+        profile_snapshot_id: str,
+        settings_json: str,
+        settings_hash: str,
+    ) -> ProcessingProfileSnapshot:
+        now = utc_now()
+        with connect_existing(self._project_db_path) as connection:
+            row = connection.execute(
+                """
+                SELECT profile_snapshot_id, settings_json, settings_hash
+                FROM processing_profile_snapshots
+                WHERE project_id = ? AND profile_snapshot_id = ?
+                """,
+                (self._project_id, profile_snapshot_id),
+            ).fetchone()
+            if row is None:
+                connection.execute(
+                    """
+                    INSERT INTO processing_profile_snapshots (
+                        profile_snapshot_id,
+                        project_id,
+                        source_profile_id,
+                        source_profile_version,
+                        snapshot_schema_version,
+                        settings_json,
+                        settings_hash,
+                        created_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        profile_snapshot_id,
+                        self._project_id,
+                        "fakeprovider_default",
+                        "1",
+                        "slice05.v1",
+                        settings_json,
+                        settings_hash,
+                        now,
+                    ),
+                )
+                row = connection.execute(
+                    """
+                    SELECT profile_snapshot_id, settings_json, settings_hash
+                    FROM processing_profile_snapshots
+                    WHERE project_id = ? AND profile_snapshot_id = ?
+                    """,
+                    (self._project_id, profile_snapshot_id),
+                ).fetchone()
+
+        return ProcessingProfileSnapshot(
+            profile_snapshot_id=row["profile_snapshot_id"],
+            settings_json=row["settings_json"],
+            settings_hash=row["settings_hash"],
+        )
 
     def reserve_attempt(self, command: AttemptReservation) -> UnitOfWorkOutcome:
         with connect_existing(self._project_db_path) as connection:
@@ -263,15 +351,117 @@ class ReadinessQueryRepository:
         self._project_db_path = project_db_path
         self._project_id = project_id
 
-    def get_task_readiness(self, task_id: str) -> ReadinessSnapshot:
+    def get_task_readiness(self, task_id: str) -> ProcessingTaskSnapshot:
         with connect_existing(self._project_db_path) as connection:
-            task = _load_task(connection, self._project_id, task_id)
-        page_id = task.target_id if task.target_type == "page" else None
+            return _load_task(connection, self._project_id, task_id)
+
+    def get_page_export_readiness(
+        self,
+        page_id: str,
+        profile_snapshot_id: str | None = None,
+    ) -> ReadinessSnapshot:
+        with connect_existing(self._project_db_path) as connection:
+            page = connection.execute(
+                """
+                SELECT active_typeset_artifact_id
+                FROM pages
+                WHERE project_id = ? AND page_id = ?
+                """,
+                (self._project_id, page_id),
+            ).fetchone()
+            if page is None:
+                raise LookupError(f"Page not found: {page_id}")
+
+            artifact = None
+            if page["active_typeset_artifact_id"] is not None:
+                artifact = connection.execute(
+                    """
+                    SELECT artifact_type, storage_state
+                    FROM processing_artifacts
+                    WHERE project_id = ? AND artifact_id = ?
+                    """,
+                    (self._project_id, page["active_typeset_artifact_id"]),
+                ).fetchone()
+
+            blockers = connection.execute(
+                """
+                SELECT issue_id
+                FROM quality_issues
+                WHERE project_id = ?
+                    AND is_blocking = 1
+                    AND status = ?
+                    AND (page_id = ? OR page_id IS NULL)
+                ORDER BY created_at, issue_id
+                """,
+                (self._project_id, "open", page_id),
+            ).fetchall()
+            warnings = connection.execute(
+                """
+                SELECT issue_id
+                FROM quality_issues
+                WHERE project_id = ?
+                    AND is_blocking = 0
+                    AND status IN ('open', 'accepted_warning')
+                    AND (page_id = ? OR page_id IS NULL)
+                ORDER BY created_at, issue_id
+                """,
+                (self._project_id, page_id),
+            ).fetchall()
+            incomplete = connection.execute(
+                """
+                SELECT COUNT(*) AS count
+                FROM text_blocks
+                WHERE project_id = ?
+                    AND page_id = ?
+                    AND (
+                        detection_status != 'done'
+                        OR ocr_status != 'done'
+                        OR translation_status != 'done'
+                        OR translation_check_status != 'done'
+                        OR cleaning_status NOT IN ('done', 'skipped')
+                        OR typesetting_status NOT IN ('done', 'skipped')
+                        OR active_ocr_result_id IS NULL
+                        OR active_translation_result_id IS NULL
+                    )
+                """,
+                (self._project_id, page_id),
+            ).fetchone()
+            skipped = connection.execute(
+                """
+                SELECT COUNT(*) AS count
+                FROM text_blocks
+                WHERE project_id = ?
+                    AND page_id = ?
+                    AND (
+                        cleaning_status = 'skipped'
+                        OR typesetting_status = 'skipped'
+                    )
+                """,
+                (self._project_id, page_id),
+            ).fetchone()
+            allow_warning_export = _allow_warning_export(
+                connection,
+                self._project_id,
+                profile_snapshot_id,
+            )
+
         return ReadinessSnapshot(
-            task_id=task.task_id,
-            task_status=task.status,
-            current_stage=task.current_stage,
             page_id=page_id,
+            active_typeset_artifact_id=page["active_typeset_artifact_id"],
+            active_typeset_artifact_type=artifact["artifact_type"]
+            if artifact is not None
+            else None,
+            active_typeset_storage_state=artifact["storage_state"]
+            if artifact is not None
+            else None,
+            open_blocking_issue_count=len(blockers),
+            unresolved_warning_issue_count=len(warnings),
+            skipped_text_block_count=int(skipped["count"]),
+            incomplete_text_block_count=int(incomplete["count"]),
+            allow_warning_export=allow_warning_export,
+            unresolved_issue_ids=tuple(
+                row["issue_id"] for row in (*blockers, *warnings)
+            ),
         )
 
 
@@ -386,11 +576,26 @@ def initialize_workflow_execution_schema(connection: sqlite3.Connection) -> None
             task_type TEXT NOT NULL,
             status TEXT NOT NULL,
             current_stage TEXT NOT NULL,
+            profile_snapshot_id TEXT,
             progress_state TEXT NOT NULL,
             retry_budget_json TEXT NOT NULL,
             heartbeat_at TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS processing_profile_snapshots (
+            profile_snapshot_id TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL,
+            source_profile_id TEXT NOT NULL,
+            source_profile_version TEXT NOT NULL,
+            snapshot_schema_version TEXT NOT NULL,
+            settings_json TEXT NOT NULL,
+            settings_hash TEXT NOT NULL,
+            created_at TEXT NOT NULL
         )
         """
     )
@@ -459,11 +664,41 @@ def initialize_workflow_execution_schema(connection: sqlite3.Connection) -> None
         CREATE TABLE IF NOT EXISTS quality_issues (
             issue_id TEXT PRIMARY KEY,
             project_id TEXT NOT NULL,
+            target_type TEXT,
+            target_id TEXT,
+            batch_id TEXT,
+            page_id TEXT,
+            text_block_id TEXT,
+            discovered_stage TEXT,
+            root_stage TEXT,
             issue_type TEXT NOT NULL,
+            error_code TEXT,
+            severity TEXT,
             status TEXT NOT NULL,
             is_blocking INTEGER NOT NULL,
+            message_key TEXT,
+            message_params_json TEXT,
+            suggested_action_key TEXT,
+            related_attempt_id TEXT,
+            related_tool_run_id TEXT,
+            related_artifact_id TEXT,
+            applies_to_result_id TEXT,
+            input_hash TEXT,
+            config_hash TEXT,
+            dedupe_key TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS workflow_decision_issues (
+            decision_id TEXT NOT NULL,
+            issue_id TEXT NOT NULL,
+            relation_type TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (decision_id, issue_id, relation_type)
         )
         """
     )
@@ -476,7 +711,14 @@ def _load_task(
 ) -> ProcessingTaskSnapshot:
     row = connection.execute(
         """
-        SELECT task_id, target_type, target_id, task_type, status, current_stage
+        SELECT
+            task_id,
+            target_type,
+            target_id,
+            task_type,
+            status,
+            current_stage,
+            profile_snapshot_id
         FROM processing_tasks
         WHERE project_id = ? AND task_id = ?
         """,
@@ -491,6 +733,7 @@ def _load_task(
         task_type=row["task_type"],
         status=row["status"],
         current_stage=row["current_stage"],
+        profile_snapshot_id=row["profile_snapshot_id"],
     )
 
 
@@ -606,3 +849,27 @@ def _next_attempt_number(
         (project_id, task_id),
     ).fetchone()
     return int(row["attempt_number"])
+
+
+def _allow_warning_export(
+    connection: sqlite3.Connection,
+    project_id: str,
+    profile_snapshot_id: str | None,
+) -> bool:
+    if profile_snapshot_id is None:
+        return False
+    row = connection.execute(
+        """
+        SELECT settings_json
+        FROM processing_profile_snapshots
+        WHERE project_id = ? AND profile_snapshot_id = ?
+        """,
+        (project_id, profile_snapshot_id),
+    ).fetchone()
+    if row is None:
+        return False
+    try:
+        settings = json.loads(row["settings_json"])
+    except json.JSONDecodeError:
+        return False
+    return bool(settings.get("allow_warning_export"))
