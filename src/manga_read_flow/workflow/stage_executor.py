@@ -237,6 +237,7 @@ def _register_temp_artifacts(
                     source_stage=context.stage,
                     media_type=temp_file.media_type,
                     safety=_artifact_safety(temp_file.safety_flags),
+                    dependency_hash=context.input_hash,
                 )
             )
         except (ArtifactRegistrationError, ValueError):

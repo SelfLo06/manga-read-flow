@@ -20,12 +20,18 @@ class FakeProvider:
 
     def __init__(self, *, fake_mode: str) -> None:
         self._fake_mode = fake_mode
+        self._call_counts: dict[str, int] = {}
 
     @classmethod
     def happy_path(cls) -> FakeProvider:
         return cls(fake_mode="happy_path")
 
+    def call_count(self, stage: str) -> int:
+        return self._call_counts.get(stage, 0)
+
     def run(self, request: ProviderRequest) -> ProviderResult:
+        self._call_counts[request.stage] = self.call_count(request.stage) + 1
+
         happy_detection_modes = {
             "detection_success",
             "happy_path",

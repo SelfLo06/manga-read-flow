@@ -32,6 +32,7 @@ class RegisterArtifactMetadata:
     retention_class: str
     storage_state: str
     safety: ArtifactSafetyMetadata
+    dependency_hash: str | None = None
 
 
 @dataclass(frozen=True)
@@ -54,6 +55,7 @@ class ProcessingArtifactSnapshot:
     may_contain_translation: bool
     may_contain_provider_response: bool
     contains_secret_redacted: bool
+    dependency_hash: str | None = None
     batch_id: str | None = None
     page_id: str | None = None
     owner_type: str | None = None

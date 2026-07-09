@@ -54,6 +54,9 @@ class AcceptedResult:
     model_id: str | None = None
     workflow_attempt_id: str | None = None
     tool_run_id: str | None = None
+    geometry_hash: str | None = None
+    input_hash: str | None = None
+    config_hash: str | None = None
 
 
 @dataclass(frozen=True)
@@ -406,9 +409,12 @@ def _insert_accepted_result(
                 model_id,
                 workflow_attempt_id,
                 tool_run_id,
+                input_hash,
+                config_hash,
+                geometry_hash,
                 created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 result.result_id,
@@ -428,6 +434,9 @@ def _insert_accepted_result(
                 result.model_id,
                 result.workflow_attempt_id,
                 result.tool_run_id,
+                result.input_hash,
+                result.config_hash,
+                result.geometry_hash,
                 utc_now(),
             ),
         )
@@ -449,9 +458,11 @@ def _insert_accepted_result(
                 model_id,
                 workflow_attempt_id,
                 tool_run_id,
+                input_hash,
+                config_hash,
                 created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 result.result_id,
@@ -474,6 +485,8 @@ def _insert_accepted_result(
                 result.model_id,
                 result.workflow_attempt_id,
                 result.tool_run_id,
+                result.input_hash,
+                result.config_hash,
                 utc_now(),
             ),
         )

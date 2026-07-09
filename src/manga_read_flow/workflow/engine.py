@@ -27,6 +27,12 @@ from manga_read_flow.persistence.repository_uow_core import (
 )
 from manga_read_flow.workflow.detection_outputs import detected_text_blocks
 from manga_read_flow.workflow.quality_acceptance import issue_changes_from_drafts
+from manga_read_flow.workflow.readiness import accept_export_check
+from manga_read_flow.workflow.reuse import (
+    ReuseReservationConflictError,
+    WorkflowReuseService,
+    accept_reuse_plan,
+)
 from manga_read_flow.workflow.stage_results import stage_error_code, synthetic_stage_result
 from manga_read_flow.workflow.stage_executor import (
     StageExecutionConflictError,
@@ -72,6 +78,13 @@ class WorkflowLoopEngine:
         self._provider = provider
         self._quality_check_service = quality_check_service or QualityCheckService()
         self._project_id = repositories.identity.get_metadata().project_id
+        self._config_hash = _hash_text("fakeprovider-default-config")
+        self._reuse = WorkflowReuseService(
+            repositories=repositories,
+            artifact_service=artifact_service,
+            provider=provider,
+            config_hash=self._config_hash,
+        )
 
     def run_task(self, task_id: str) -> ProcessPageResult:
         while True:
@@ -89,6 +102,34 @@ class WorkflowLoopEngine:
             precondition = self._precondition_block(task, page)
             if precondition is not None:
                 return precondition
+
+            reuse_plan = self._reuse.plan_reuse(task, page)
+            if reuse_plan is not None:
+                try:
+                    reuse = accept_reuse_plan(
+                        repositories=self._repositories,
+                        task=task,
+                        page=page,
+                        plan=reuse_plan,
+                        build_command=self._command,
+                    )
+                except ReuseReservationConflictError:
+                    return ProcessPageResult(
+                        task_id=task.task_id,
+                        task_status="conflict",
+                        page_id=page.page_id,
+                        page_status=page.status,
+                        final_decision="reload_required",
+                    )
+                if not reuse.committed:
+                    return ProcessPageResult(
+                        task_id=task.task_id,
+                        task_status="conflict",
+                        page_id=page.page_id,
+                        page_status=page.status,
+                        final_decision="reload_required",
+                    )
+                continue
 
             try:
                 stage_result = self._execute_stage(task, page)
@@ -133,6 +174,7 @@ class WorkflowLoopEngine:
                 page.page_id
             )
         )
+        input_hash = self._reuse.stage_input_hash(task.current_stage, page)
         attempt_id = f"attempt-{task.current_stage}-{uuid4()}"
         tool_run_id = f"tool-run-{task.current_stage}-{uuid4()}"
         request_id = f"request-{task.current_stage}-{uuid4()}"
@@ -154,8 +196,8 @@ class WorkflowLoopEngine:
                     expected_current_stage=task.current_stage,
                     runner_id="local-taskrunner",
                     attempt_temp_root=Path(temp_dir),
-                    input_hash=_hash_text(f"{task.task_id}:{task.current_stage}:input"),
-                    config_hash=_hash_text("fakeprovider-default-config"),
+                    input_hash=input_hash,
+                    config_hash=self._config_hash,
                     context_hash=_hash_text(f"{page.page_id}:{task.current_stage}:context"),
                     source_language="ja",
                     target_language="zh-Hans",
@@ -221,8 +263,8 @@ class WorkflowLoopEngine:
                 else False,
                 workflow_attempt_id=stage_result.attempt_id,
                 tool_run_id=stage_result.tool_run_id,
-                input_hash=_hash_text(f"{task.task_id}:{stage_result.stage}:input"),
-                config_hash=_hash_text("fakeprovider-default-config"),
+                input_hash=self._reuse.stage_input_hash(stage_result.stage, page),
+                config_hash=self._config_hash,
                 candidate_outputs=stage_result.candidate_outputs,
                 registered_artifact_ids=tuple(
                     artifact.artifact_id
@@ -251,7 +293,15 @@ class WorkflowLoopEngine:
         if stage_result.stage == "typesetting":
             return self._accept_typesetting(task, page, stage_result, quality_report)
         if stage_result.stage == "export_check":
-            return self._accept_export_check(task, page, stage_result)
+            return accept_export_check(
+                repositories=self._repositories,
+                artifact_service=self._artifact_service,
+                task=task,
+                page=page,
+                stage_result=stage_result,
+                build_command=self._command,
+                build_blocked_command=self._blocked_command,
+            )
         raise ValueError(f"Unsupported stage: {stage_result.stage}")
 
     def _accept_detection(self, task, page, stage_result: StageResult):
@@ -294,9 +344,10 @@ class WorkflowLoopEngine:
         accepted_results = []
         active_pointers = []
         stage_statuses = []
+        input_hash = self._reuse.stage_input_hash("ocr", page)
         for block in blocks:
             result = result_by_block[block.text_block_id]
-            result_id = f"ocr-{block.text_block_id}-v1"
+            result_id = f"ocr-{block.text_block_id}-{uuid4()}"
             source_text = str(result["source_text"])
             accepted_results.append(
                 AcceptedResult(
@@ -310,6 +361,9 @@ class WorkflowLoopEngine:
                     model_id=stage_result.provider_result.model_id,
                     workflow_attempt_id=stage_result.attempt_id,
                     tool_run_id=stage_result.provider_result.payload.get("tool_run_id"),
+                    geometry_hash=block.geometry_hash,
+                    input_hash=input_hash,
+                    config_hash=self._config_hash,
                 )
             )
             active_pointers.append(
@@ -339,7 +393,9 @@ class WorkflowLoopEngine:
                 decision_type="continue",
                 reason_code="fake_ocr_accepted",
                 next_stage="translation",
-                expected_ocr={block.text_block_id: None for block in blocks},
+                expected_ocr={
+                    block.text_block_id: block.active_ocr_result_id for block in blocks
+                },
                 accepted_results=tuple(accepted_results),
                 active_pointers=tuple(active_pointers),
                 stage_statuses=tuple(stage_statuses),
@@ -378,6 +434,12 @@ class WorkflowLoopEngine:
         ocr_inputs = self._repositories.result_versions.active_ocr_inputs_for_page(
             page.page_id
         )
+        blocks_by_id = {
+            block.text_block_id: block
+            for block in self._repositories.content_state.list_text_blocks_for_page(
+                page.page_id
+            )
+        }
         result_by_block = {
             str(result["text_block_id"]): result
             for result in stage_result.candidate_outputs.get("translations", ())
@@ -385,6 +447,7 @@ class WorkflowLoopEngine:
         accepted_results = []
         active_pointers = []
         stage_statuses = []
+        input_hash = self._reuse.stage_input_hash("translation", page)
         missing_block_ids = {
             draft.target_id
             for draft in quality_report.issue_drafts
@@ -403,7 +466,7 @@ class WorkflowLoopEngine:
                 )
                 continue
             result = result_by_block[text_block_id]
-            result_id = f"translation-{text_block_id}-v1"
+            result_id = f"translation-{text_block_id}-{uuid4()}"
             translation_text = str(result["translation_text"])
             accepted_results.append(
                 AcceptedResult(
@@ -420,6 +483,8 @@ class WorkflowLoopEngine:
                     model_id=stage_result.provider_result.model_id,
                     workflow_attempt_id=stage_result.attempt_id,
                     tool_run_id=stage_result.provider_result.payload.get("tool_run_id"),
+                    input_hash=input_hash,
+                    config_hash=self._config_hash,
                 )
             )
             active_pointers.append(
@@ -455,7 +520,12 @@ class WorkflowLoopEngine:
                 next_stage="block" if has_blocker else "translation_check",
                 task_terminal_status="blocked" if has_blocker else "running",
                 page_status="blocked" if has_blocker else None,
-                expected_translation={row.text_block_id: None for row in ocr_inputs},
+                expected_translation={
+                    row.text_block_id: blocks_by_id[
+                        row.text_block_id
+                    ].active_translation_result_id
+                    for row in ocr_inputs
+                },
                 accepted_results=tuple(accepted_results),
                 active_pointers=tuple(active_pointers),
                 issue_lifecycle=issue_changes,
@@ -465,7 +535,7 @@ class WorkflowLoopEngine:
                         target_type="text_block",
                         target_id=row.text_block_id,
                         stage="translation",
-                        status="pending",
+                        status=blocks_by_id[row.text_block_id].translation_status,
                     )
                     for row in ocr_inputs
                 ),
@@ -694,113 +764,6 @@ class WorkflowLoopEngine:
                     )
                     for block in blocks
                 ),
-            )
-        )
-
-    def _accept_export_check(self, task, page, stage_result: StageResult):
-        readiness = self._repositories.readiness.get_page_export_readiness(
-            page.page_id,
-            profile_snapshot_id=task.profile_snapshot_id,
-        )
-        artifact_is_valid = False
-        warning_artifact_is_valid = False
-        if readiness.active_typeset_artifact_id is not None:
-            report = self._artifact_service.validate_artifact(
-                readiness.active_typeset_artifact_id,
-                expected_use="export_check",
-                active_reference="page.active_typeset_artifact_id",
-            )
-            artifact_is_valid = (
-                readiness.active_typeset_artifact_type == "typeset_image"
-                and readiness.active_typeset_storage_state == "present"
-                and report.integrity_status == "valid"
-            )
-            warning_artifact_is_valid = (
-                readiness.active_typeset_artifact_type
-                in {"typeset_image", "typeset_preview_image"}
-                and readiness.active_typeset_storage_state == "present"
-                and report.integrity_status == "valid"
-            )
-
-        ready = (
-            readiness.active_typeset_artifact_id is not None
-            and artifact_is_valid
-            and readiness.open_blocking_issue_count == 0
-            and readiness.incomplete_text_block_count == 0
-            and readiness.unresolved_warning_issue_count == 0
-            and readiness.skipped_text_block_count == 0
-        )
-        if ready:
-            return self._repositories.uow.accept_stage(
-                self._command(
-                    task_id=task.task_id,
-                    task_status=task.status,
-                    current_stage=task.current_stage,
-                    page=page,
-                    stage_result=stage_result,
-                    decision_type="finish_ready_for_export",
-                    reason_code="export_readiness_passed",
-                    next_stage="finish_ready_for_export",
-                    task_terminal_status="succeeded",
-                    page_status="ready_for_export",
-                )
-            )
-
-        warning_ready = (
-            readiness.active_typeset_artifact_id is not None
-            and warning_artifact_is_valid
-            and readiness.open_blocking_issue_count == 0
-            and readiness.incomplete_text_block_count == 0
-            and (
-                readiness.unresolved_warning_issue_count > 0
-                or readiness.skipped_text_block_count > 0
-            )
-            and readiness.allow_warning_export
-        )
-        if warning_ready:
-            return self._repositories.uow.accept_stage(
-                self._command(
-                    task_id=task.task_id,
-                    task_status=task.status,
-                    current_stage=task.current_stage,
-                    page=page,
-                    stage_result=stage_result,
-                    decision_type="finish_ready_for_export_with_warnings",
-                    reason_code="export_readiness_passed_with_warnings",
-                    next_stage="finish_ready_for_export_with_warnings",
-                    task_terminal_status="succeeded_with_warnings",
-                    page_status="ready_for_export_with_warnings",
-                    linked_issue_ids=readiness.unresolved_issue_ids,
-                )
-            )
-
-        if readiness.unresolved_issue_ids:
-            return self._repositories.uow.accept_stage(
-                self._command(
-                    task_id=task.task_id,
-                    task_status=task.status,
-                    current_stage=task.current_stage,
-                    page=page,
-                    stage_result=stage_result,
-                    decision_type="block",
-                    reason_code="export_readiness_blocked",
-                    next_stage="block",
-                    task_terminal_status="blocked",
-                    page_status="blocked",
-                    linked_issue_ids=readiness.unresolved_issue_ids,
-                )
-            )
-
-        return self._repositories.uow.accept_stage(
-            self._blocked_command(
-                task_id=task.task_id,
-                task_status=task.status,
-                current_stage=task.current_stage,
-                page_id=page.page_id,
-                page=page,
-                attempt_id=stage_result.attempt_id,
-                reason_code="export_readiness_blocked",
-                issue_type="export_readiness_blocked",
             )
         )
 

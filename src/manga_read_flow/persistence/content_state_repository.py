@@ -35,8 +35,10 @@ class TextBlockSnapshot:
     text_block_id: str
     page_id: str
     reading_order: int
+    geometry_hash: str | None
     active_ocr_result_id: str | None
     active_translation_result_id: str | None
+    locked_translation_result_id: str | None
     detection_status: str
     ocr_status: str
     translation_status: str
@@ -302,6 +304,67 @@ class ResultVersionRepository:
             block = _load_text_block(connection, self._project_id, text_block_id)
         return block.active_ocr_result_id, block.active_translation_result_id
 
+    def reusable_active_ocr_for_page(
+        self,
+        page_id: str,
+        *,
+        provider_name: str,
+        model_id: str | None,
+        input_hash: str,
+        config_hash: str,
+    ) -> tuple[ActiveOcrInput, ...]:
+        rows = self.active_ocr_inputs_for_page(page_id)
+        if not rows:
+            return ()
+
+        with connect_existing(self._project_db_path) as connection:
+            evidence = connection.execute(
+                """
+                SELECT
+                    tb.text_block_id,
+                    tb.ocr_status,
+                    tb.active_ocr_result_id,
+                    tb.geometry_hash,
+                    ocr.source_text,
+                    ocr.source_text_hash,
+                    ocr.provider_name,
+                    ocr.model_id,
+                    ocr.input_hash,
+                    ocr.config_hash,
+                    ocr.geometry_hash AS result_geometry_hash
+                FROM text_blocks tb
+                LEFT JOIN ocr_results ocr
+                    ON ocr.project_id = tb.project_id
+                    AND ocr.ocr_result_id = tb.active_ocr_result_id
+                WHERE tb.project_id = ? AND tb.page_id = ?
+                ORDER BY tb.reading_order
+                """,
+                (self._project_id, page_id),
+            ).fetchall()
+
+        reusable: list[ActiveOcrInput] = []
+        for row in evidence:
+            if (
+                row["ocr_status"] != "done"
+                or row["active_ocr_result_id"] is None
+                or row["source_text_hash"] is None
+                or row["result_geometry_hash"] != row["geometry_hash"]
+                or row["provider_name"] != provider_name
+                or row["model_id"] != model_id
+                or row["input_hash"] != input_hash
+                or row["config_hash"] != config_hash
+            ):
+                return ()
+            reusable.append(
+                ActiveOcrInput(
+                    text_block_id=row["text_block_id"],
+                    active_ocr_result_id=row["active_ocr_result_id"],
+                    source_text=row["source_text"],
+                    source_text_hash=row["source_text_hash"],
+                )
+            )
+        return tuple(reusable)
+
     def active_ocr_inputs_for_page(self, page_id: str) -> tuple[ActiveOcrInput, ...]:
         with connect_existing(self._project_db_path) as connection:
             rows = connection.execute(
@@ -329,6 +392,132 @@ class ResultVersionRepository:
             )
             for row in rows
         )
+
+    def reusable_active_translations_for_page(
+        self,
+        page_id: str,
+        *,
+        provider_name: str,
+        model_id: str | None,
+        input_hash: str,
+        config_hash: str,
+        glossary_version_id: str,
+    ) -> tuple[ActiveTranslationInput, ...]:
+        with connect_existing(self._project_db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    tb.text_block_id,
+                    tb.translation_status,
+                    tb.active_ocr_result_id,
+                    tb.active_translation_result_id,
+                    ocr.source_text_hash AS active_source_text_hash,
+                    tr.source_ocr_result_id,
+                    tr.source_text_hash,
+                    tr.translation_text,
+                    tr.translation_text_hash,
+                    tr.glossary_version_id,
+                    tr.provider_name,
+                    tr.model_id,
+                    tr.input_hash,
+                    tr.config_hash
+                FROM text_blocks tb
+                LEFT JOIN ocr_results ocr
+                    ON ocr.project_id = tb.project_id
+                    AND ocr.ocr_result_id = tb.active_ocr_result_id
+                LEFT JOIN translation_results tr
+                    ON tr.project_id = tb.project_id
+                    AND tr.translation_result_id = tb.active_translation_result_id
+                WHERE tb.project_id = ? AND tb.page_id = ?
+                ORDER BY tb.reading_order
+                """,
+                (self._project_id, page_id),
+            ).fetchall()
+
+        if not rows:
+            return ()
+
+        reusable: list[ActiveTranslationInput] = []
+        for row in rows:
+            if (
+                row["translation_status"] != "done"
+                or row["active_ocr_result_id"] is None
+                or row["active_translation_result_id"] is None
+                or row["source_ocr_result_id"] != row["active_ocr_result_id"]
+                or row["source_text_hash"] != row["active_source_text_hash"]
+                or row["translation_text_hash"] is None
+                or row["glossary_version_id"] != glossary_version_id
+                or row["provider_name"] != provider_name
+                or row["model_id"] != model_id
+                or row["input_hash"] != input_hash
+                or row["config_hash"] != config_hash
+            ):
+                return ()
+            reusable.append(
+                ActiveTranslationInput(
+                    text_block_id=row["text_block_id"],
+                    active_translation_result_id=row["active_translation_result_id"],
+                    translation_text=row["translation_text"],
+                    translation_text_hash=row["translation_text_hash"],
+                )
+            )
+        return tuple(reusable)
+
+    def locked_active_translations_for_page(
+        self,
+        page_id: str,
+    ) -> tuple[ActiveTranslationInput, ...]:
+        with connect_existing(self._project_db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    tb.text_block_id,
+                    tb.translation_status,
+                    tb.active_ocr_result_id,
+                    tb.active_translation_result_id,
+                    tb.locked_translation_result_id,
+                    ocr.source_text_hash AS active_source_text_hash,
+                    tr.source_ocr_result_id,
+                    tr.source_text_hash,
+                    tr.translation_text,
+                    tr.translation_text_hash
+                FROM text_blocks tb
+                LEFT JOIN ocr_results ocr
+                    ON ocr.project_id = tb.project_id
+                    AND ocr.ocr_result_id = tb.active_ocr_result_id
+                LEFT JOIN translation_results tr
+                    ON tr.project_id = tb.project_id
+                    AND tr.translation_result_id = tb.active_translation_result_id
+                WHERE tb.project_id = ? AND tb.page_id = ?
+                ORDER BY tb.reading_order
+                """,
+                (self._project_id, page_id),
+            ).fetchall()
+
+        if not rows:
+            return ()
+
+        reusable: list[ActiveTranslationInput] = []
+        for row in rows:
+            if (
+                row["translation_status"] != "done"
+                or row["locked_translation_result_id"] is None
+                or row["locked_translation_result_id"]
+                != row["active_translation_result_id"]
+                or row["source_ocr_result_id"] != row["active_ocr_result_id"]
+                or row["source_text_hash"] != row["active_source_text_hash"]
+                or row["translation_text_hash"] is None
+            ):
+                return ()
+            reusable.append(
+                ActiveTranslationInput(
+                    text_block_id=row["text_block_id"],
+                    active_translation_result_id=row["active_translation_result_id"],
+                    translation_text=row["translation_text"],
+                    translation_text_hash=row["translation_text_hash"],
+                )
+            )
+        return tuple(reusable)
 
     def active_translation_inputs_for_page(
         self,
@@ -456,6 +645,7 @@ def initialize_content_state_schema(connection: sqlite3.Connection) -> None:
             detection_confidence REAL,
             active_ocr_result_id TEXT,
             active_translation_result_id TEXT,
+            locked_translation_result_id TEXT,
             ocr_status TEXT NOT NULL,
             translation_status TEXT NOT NULL,
             translation_check_status TEXT NOT NULL,
@@ -481,6 +671,9 @@ def initialize_content_state_schema(connection: sqlite3.Connection) -> None:
             model_id TEXT,
             workflow_attempt_id TEXT,
             tool_run_id TEXT,
+            input_hash TEXT,
+            config_hash TEXT,
+            geometry_hash TEXT,
             created_at TEXT NOT NULL
         )
         """
@@ -502,6 +695,8 @@ def initialize_content_state_schema(connection: sqlite3.Connection) -> None:
             model_id TEXT,
             workflow_attempt_id TEXT,
             tool_run_id TEXT,
+            input_hash TEXT,
+            config_hash TEXT,
             created_at TEXT NOT NULL
         )
         """
@@ -603,6 +798,8 @@ def _load_text_block(
             reading_order,
             active_ocr_result_id,
             active_translation_result_id,
+            locked_translation_result_id,
+            geometry_hash,
             detection_status,
             ocr_status,
             translation_status,
@@ -620,8 +817,10 @@ def _load_text_block(
         text_block_id=row["text_block_id"],
         page_id=row["page_id"],
         reading_order=row["reading_order"],
+        geometry_hash=row["geometry_hash"],
         active_ocr_result_id=row["active_ocr_result_id"],
         active_translation_result_id=row["active_translation_result_id"],
+        locked_translation_result_id=row["locked_translation_result_id"],
         detection_status=row["detection_status"],
         ocr_status=row["ocr_status"],
         translation_status=row["translation_status"],

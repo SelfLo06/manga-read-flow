@@ -125,6 +125,7 @@ class ArtifactService:
         media_type: str | None = None,
         retention_class: str = "stage_output",
         safety: ArtifactSafetyMetadata | None = None,
+        dependency_hash: str | None = None,
     ) -> ProcessingArtifactSnapshot:
         source = Path(temp_path)
         if not source.is_file():
@@ -175,6 +176,7 @@ class ArtifactService:
                 retention_class=retention_class,
                 storage_state="present",
                 safety=safety or ArtifactSafetyMetadata(),
+                dependency_hash=dependency_hash,
             )
         )
 

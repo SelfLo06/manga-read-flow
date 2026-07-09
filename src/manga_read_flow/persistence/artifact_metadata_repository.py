@@ -50,10 +50,11 @@ class ArtifactMetadataRepository:
                     may_contain_translation,
                     may_contain_provider_response,
                     contains_secret_redacted,
+                    dependency_hash,
                     created_at,
                     updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     command.artifact_id,
@@ -79,6 +80,7 @@ class ArtifactMetadataRepository:
                     int(command.safety.may_contain_translation),
                     int(command.safety.may_contain_provider_response),
                     int(command.safety.contains_secret_redacted),
+                    command.dependency_hash,
                     now,
                     now,
                 ),
@@ -138,6 +140,7 @@ def initialize_artifact_metadata_schema(connection: sqlite3.Connection) -> None:
             may_contain_translation INTEGER NOT NULL DEFAULT 0,
             may_contain_provider_response INTEGER NOT NULL DEFAULT 0,
             contains_secret_redacted INTEGER NOT NULL DEFAULT 0,
+            dependency_hash TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             UNIQUE(project_id, relative_path)
@@ -176,6 +179,7 @@ def _load_artifact(
             may_contain_translation,
             may_contain_provider_response,
             contains_secret_redacted
+            ,dependency_hash
         FROM processing_artifacts
         WHERE project_id = ? AND artifact_id = ?
         """,
@@ -202,6 +206,7 @@ def _load_artifact(
         may_contain_translation=bool(row["may_contain_translation"]),
         may_contain_provider_response=bool(row["may_contain_provider_response"]),
         contains_secret_redacted=bool(row["contains_secret_redacted"]),
+        dependency_hash=row["dependency_hash"],
         batch_id=row["batch_id"],
         page_id=row["page_id"],
         owner_type=row["owner_type"],
