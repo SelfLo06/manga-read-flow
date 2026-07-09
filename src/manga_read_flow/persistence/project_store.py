@@ -32,7 +32,7 @@ APP_BASELINE_CHECKSUM = sha256(
     b"app_baseline_v1:projects:schema_migrations"
 ).hexdigest()
 PROJECT_BASELINE_CHECKSUM = sha256(
-    b"project_baseline_v1:project_metadata:schema_migrations:repository_uow_core:artifactservice_import"
+    b"project_baseline_v1:project_metadata:schema_migrations:repository_uow_core:artifactservice_import:slice05_workflow_happy_path"
 ).hexdigest()
 
 

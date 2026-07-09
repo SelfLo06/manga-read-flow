@@ -21,8 +21,25 @@ class FakeProvider:
     def __init__(self, *, fake_mode: str) -> None:
         self._fake_mode = fake_mode
 
+    @classmethod
+    def happy_path(cls) -> FakeProvider:
+        return cls(fake_mode="happy_path")
+
     def run(self, request: ProviderRequest) -> ProviderResult:
-        if request.stage == "detection" and self._fake_mode == "detection_success":
+        if request.stage == "detection" and self._fake_mode in {
+            "detection_success",
+            "happy_path",
+        }:
+            first_block_ref = (
+                f"tb-{request.page_id}-001"
+                if self._fake_mode == "happy_path"
+                else "fake-block-1"
+            )
+            second_block_ref = (
+                f"tb-{request.page_id}-002"
+                if self._fake_mode == "happy_path"
+                else "fake-block-2"
+            )
             return ProviderResult(
                 outcome=ProviderOutcome.SUCCESS,
                 provider_name=self.provider_name,
@@ -30,7 +47,7 @@ class FakeProvider:
                 payload={
                     "text_blocks": (
                         {
-                            "provider_block_ref": "fake-block-1",
+                            "provider_block_ref": first_block_ref,
                             "bbox": {
                                 "x": 10,
                                 "y": 20,
@@ -42,7 +59,7 @@ class FakeProvider:
                             "confidence": 0.93,
                         },
                         {
-                            "provider_block_ref": "fake-block-2",
+                            "provider_block_ref": second_block_ref,
                             "bbox": {
                                 "x": 12,
                                 "y": 64,
@@ -57,7 +74,18 @@ class FakeProvider:
                 },
             )
 
-        if request.stage == "ocr" and self._fake_mode == "ocr_success":
+        if request.stage == "export_check" and self._fake_mode == "happy_path":
+            return ProviderResult(
+                outcome=ProviderOutcome.SUCCESS,
+                provider_name=self.provider_name,
+                model_id=self.model_id,
+                payload={"readiness_probe": "passed"},
+            )
+
+        if request.stage == "ocr" and self._fake_mode in {
+            "ocr_success",
+            "happy_path",
+        }:
             return ProviderResult(
                 outcome=ProviderOutcome.SUCCESS,
                 provider_name=self.provider_name,
@@ -78,7 +106,10 @@ class FakeProvider:
                 },
             )
 
-        if request.stage == "translation" and self._fake_mode == "translation_success":
+        if request.stage == "translation" and self._fake_mode in {
+            "translation_success",
+            "happy_path",
+        }:
             return ProviderResult(
                 outcome=ProviderOutcome.SUCCESS,
                 provider_name=self.provider_name,
@@ -97,6 +128,14 @@ class FakeProvider:
                         )
                     )
                 },
+            )
+
+        if request.stage == "translation_check" and self._fake_mode == "happy_path":
+            return ProviderResult(
+                outcome=ProviderOutcome.SUCCESS,
+                provider_name=self.provider_name,
+                model_id=self.model_id,
+                payload={"blocking_issues": ()},
             )
 
         if request.stage == "translation" and self._fake_mode == "translation_failure":
@@ -185,7 +224,10 @@ class FakeProvider:
                 ),
             )
 
-        if request.stage == "cleaning" and self._fake_mode == "cleaning_success":
+        if request.stage == "cleaning" and self._fake_mode in {
+            "cleaning_success",
+            "happy_path",
+        }:
             temp_path = _write_temp_png(request, "cleaned.png")
             return ProviderResult(
                 outcome=ProviderOutcome.SUCCESS,
@@ -243,7 +285,10 @@ class FakeProvider:
                 ),
             )
 
-        if request.stage == "typesetting" and self._fake_mode == "typesetting_success":
+        if request.stage == "typesetting" and self._fake_mode in {
+            "typesetting_success",
+            "happy_path",
+        }:
             temp_path = _write_temp_png(request, "typeset.png")
             return ProviderResult(
                 outcome=ProviderOutcome.SUCCESS,

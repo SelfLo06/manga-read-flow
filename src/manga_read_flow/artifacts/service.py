@@ -178,6 +178,29 @@ class ArtifactService:
             )
         )
 
+    def register_stage_image(
+        self,
+        *,
+        source_path: Path | str,
+        batch_id: str,
+        page_id: str,
+        stage: str,
+        artifact_type: str,
+        retention_class: str,
+        safety: ArtifactSafetyMetadata,
+    ) -> ProcessingArtifactSnapshot:
+        return self.register_stage_output(
+            temp_path=source_path,
+            batch_id=batch_id,
+            page_id=page_id,
+            owner_type="page",
+            owner_id=page_id,
+            artifact_type=artifact_type,
+            source_stage=stage,
+            retention_class=retention_class,
+            safety=safety,
+        )
+
     def validate_artifact(
         self,
         artifact_id: str,
