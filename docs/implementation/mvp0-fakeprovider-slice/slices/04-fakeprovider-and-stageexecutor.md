@@ -1,31 +1,31 @@
-# Slice 04: FakeProvider and StageExecutor
+# Slice 04：FakeProvider and StageExecutor
 
-## 1. Objective
+## 1. 目标
 
-Plan deterministic FakeProvider contracts and the StageExecutor evidence boundary for detection, OCR, translation, cleaning, and typesetting.
+规划 detection、OCR、translation、cleaning 和 typesetting 的 deterministic FakeProvider contracts 与 StageExecutor evidence boundary。
 
-This slice proves that provider-style stage execution can produce deterministic outputs and failures without accessing SQLite, registering official artifacts directly, creating QualityIssues, updating active pointers, or creating WorkflowDecisions.
+本 slice 证明 provider-style stage execution 可以在不访问 SQLite、不直接登记 official artifacts、不创建 QualityIssues、不更新 active pointers、不创建 WorkflowDecisions 的情况下，生成 deterministic outputs 和 failures。
 
-## 2. Why this slice comes now
+## 2. 为什么现在做这个 slice
 
-The Project store, repositories, UoW, and ArtifactService boundaries are now available. The next risk is boundary drift around provider execution. This slice isolates provider calls and stage evidence before WorkflowLoopEngine starts making decisions from that evidence.
+Project store、repositories、UoW 和 ArtifactService 边界已经可用。下一个风险是 provider execution 周围的边界漂移。本 slice 在 WorkflowLoopEngine 开始根据 evidence 做决策之前，隔离 provider calls 和 stage evidence。
 
-Decisions:
+决策：
 
-- FakeProvider uses the real provider result envelope: `success`, `partial_success`, `failure`, `refusal`, and `invalid_output`.
-- FakeProvider modes are deterministic and test-visible through task/profile/test configuration, not hidden process globals.
-- Providers may write temp outputs only under an attempt temp root.
-- StageExecutor records only sanitized tool evidence through `StageEvidenceWriter`.
-- Official artifact registration is performed through ArtifactService after provider output, but active pointer selection remains forbidden here.
+- FakeProvider 使用真实 provider result envelope：`success`、`partial_success`、`failure`、`refusal` 和 `invalid_output`。
+- FakeProvider modes 是 deterministic，并通过 task / profile / test configuration 让测试可见，而不是隐藏在 process globals 中。
+- Providers 只能在 attempt temp root 下写 temp outputs。
+- StageExecutor 只通过 `StageEvidenceWriter` 记录 sanitized tool evidence。
+- Provider output 之后通过 ArtifactService 执行 official artifact registration，但 active pointer selection 在这里仍被禁止。
 
-Rejected alternatives:
+被拒绝的备选方案：
 
-- Providers returning OCRResult, TranslationResult, QualityIssue, WorkflowDecision, or artifact ids.
-- StageExecutor doing retry/fallback/skip/warning/block logic.
-- Provider calls inside SQLite write transactions.
-- Real OCR/LLM/cleaner/typesetter integrations before FakeProvider validation.
+- Providers 返回 OCRResult、TranslationResult、QualityIssue、WorkflowDecision 或 artifact ids。
+- StageExecutor 执行 retry / fallback / skip / warning / block 逻辑。
+- 在 SQLite write transactions 内执行 provider calls。
+- 在 FakeProvider validation 之前接入真实 OCR / LLM / cleaner / typesetter integrations。
 
-## 3. Inputs from prior designs
+## 3. 来自先前设计的输入
 
 - `docs/design/execution-contract/final/provider-adapter-contract.md`
 - `docs/design/execution-contract/final/stage-executor-contract.md`
@@ -37,89 +37,89 @@ Rejected alternatives:
 - `docs/implementation/mvp0-fakeprovider-slice/HARNESS.md`
 - `docs/implementation/mvp0-fakeprovider-slice/PLAN.md`
 
-## 4. Allowed files or directories to change during implementation
+## 4. 实现期间允许修改的文件或目录
 
-For the future implementation task only:
+仅适用于未来实现任务：
 
 - `src/manga_read_flow/providers/**`
 - `src/manga_read_flow/workflow/stage_executor*`
 - `src/manga_read_flow/workflow/stages/**`
-- `src/manga_read_flow/artifacts/**` only for temp-to-official registration calls needed by stage outputs.
-- `src/manga_read_flow/persistence/**` only for `StageEvidenceWriter` support.
-- `src/manga_read_flow/domain/**` for provider/stage DTOs.
+- `src/manga_read_flow/artifacts/**`，仅用于 stage outputs 需要的 temp-to-official registration calls。
+- `src/manga_read_flow/persistence/**`，仅用于 `StageEvidenceWriter` support。
+- `src/manga_read_flow/domain/**`，用于 provider / stage DTOs。
 - `tests/integration/test_fakeprovider_stageexecutor.py`
 - `tests/fixtures/**`
 
-## 5. Forbidden changes
+## 5. 禁止变更
 
-- WorkflowLoopEngine final decision logic.
-- Active OCR/translation/cleaned/typeset pointer updates.
-- QualityIssue creation or lifecycle persistence.
-- WorkflowDecision creation.
-- Retry, fallback, skip, warning, pause, block, or readiness decisions.
-- Real provider integrations, real translation prompt templates, cloud calls, or local OCR/model calls.
-- UI/API/frontend/export code.
+- WorkflowLoopEngine final decision logic。
+- Active OCR / translation / cleaned / typeset pointer updates。
+- QualityIssue creation 或 lifecycle persistence。
+- WorkflowDecision creation。
+- Retry、fallback、skip、warning、pause、block 或 readiness decisions。
+- 真实 provider integrations、真实 translation prompt templates、cloud calls 或 local OCR / model calls。
+- UI / API / frontend / export code。
 
-## 6. Implementation tasks
+## 6. 实现任务
 
-1. Inspect branch and `git status --short`; stop if unrelated changes exist.
-2. Define minimal provider input/output DTOs and `ProviderResult` envelope.
-3. Implement FakeProvider modes:
-   - deterministic detection success;
-   - deterministic OCR success;
-   - deterministic translation success;
-   - invalid translation output;
-   - partial translation output;
-   - provider refusal;
-   - cleaning skip or success;
-   - typesetting overflow or success.
-4. Implement StageExecutor to reserve/use a stage context, call the provider outside SQLite write transactions, normalize result/failure/refusal, and persist sanitized tool evidence only through `StageEvidenceWriter`.
-5. For cleaning/typesetting success, ensure temp file outputs can be registered through ArtifactService as official but unselected artifacts.
-6. Add tests proving no provider receives repository, SQLite, or official artifact registration access.
-7. Add tests proving StageExecutor does not create WorkflowDecision or active pointer writes.
+1. 检查 branch 和 `git status --short`；如果存在 unrelated changes，停止。
+2. 定义最小 provider input / output DTOs 和 `ProviderResult` envelope。
+3. 实现 FakeProvider modes：
+   - deterministic detection success；
+   - deterministic OCR success；
+   - deterministic translation success；
+   - invalid translation output；
+   - partial translation output；
+   - provider refusal；
+   - cleaning skip or success；
+   - typesetting overflow or success。
+4. 实现 StageExecutor：reserve / use stage context，在 SQLite write transactions 之外调用 provider，normalize result / failure / refusal，并且只通过 `StageEvidenceWriter` 持久化 sanitized tool evidence。
+5. 对 cleaning / typesetting success，确保 temp file outputs 可以通过 ArtifactService 登记为 official 但 unselected artifacts。
+6. 添加测试，证明没有 provider 接收 repository、SQLite 或 official artifact registration access。
+7. 添加测试，证明 StageExecutor 不创建 WorkflowDecision，也不写 active pointer。
 
-## 7. Validation command or test target
+## 7. 验证命令或测试目标
 
 ```bash
 pytest tests/integration/test_fakeprovider_stageexecutor.py
 ```
 
-## 8. Acceptance criteria
+## 8. 验收标准
 
-- FakeProvider produces deterministic success outputs for detection, OCR, translation, cleaning, and typesetting.
-- FakeProvider produces deterministic invalid translation and refusal outputs.
-- StageExecutor records sanitized ToolRunLog/attempt evidence only through `StageEvidenceWriter`.
-- Provider call holds no SQLite write transaction.
-- Temp outputs are not official artifacts until ArtifactService registration.
-- Official artifacts registered during this slice are unselected evidence only.
-- No active pointers, QualityIssues, WorkflowDecisions, retry budgets, or readiness state are updated by StageExecutor.
+- FakeProvider 为 detection、OCR、translation、cleaning 和 typesetting 生成 deterministic success outputs。
+- FakeProvider 生成 deterministic invalid translation 和 refusal outputs。
+- StageExecutor 只通过 `StageEvidenceWriter` 记录 sanitized ToolRunLog / attempt evidence。
+- Provider call 不持有 SQLite write transaction。
+- Temp outputs 在 ArtifactService registration 前不是 official artifacts。
+- 本 slice 中登记的 official artifacts 只是 unselected evidence。
+- StageExecutor 不更新 active pointers、QualityIssues、WorkflowDecisions、retry budgets 或 readiness state。
 
-## 9. Failure cases to test
+## 9. 需要测试的失败场景
 
-- Provider refusal creates a refused ProviderResult and sanitized tool evidence, but no QualityIssue or WorkflowDecision yet.
-- Invalid translation output is captured as provider/stage evidence without active translation selection.
-- Cleaning skip is returned as evidence for later QualityCheck/loop decision.
-- Typesetting overflow returns preview/evidence without readiness.
-- Artifact registration failure is returned as stage evidence for the loop, not hidden as provider success.
-- Provider call attempts to access repository/SQLite and test proves no such dependency exists.
+- Provider refusal 创建 refused ProviderResult 和 sanitized tool evidence，但尚不创建 QualityIssue 或 WorkflowDecision。
+- Invalid translation output 被捕获为 provider / stage evidence，不选择 active translation。
+- Cleaning skip 返回为后续 QualityCheck / loop decision 的 evidence。
+- Typesetting overflow 返回 preview / evidence，但不产生 readiness。
+- Artifact registration failure 作为 stage evidence 返回给 loop，而不是隐藏成 provider success。
+- Provider call 尝试访问 repository / SQLite，测试证明不存在这种 dependency。
 
-## 10. Commit strategy
+## 10. Commit 策略
 
-Use one focused implementation commit after `pytest tests/integration/test_fakeprovider_stageexecutor.py` passes, if commits are explicitly allowed. Stage only provider, StageExecutor, evidence-writer support, fixtures, and tests for this slice.
+如果明确允许 commits，则在 `pytest tests/integration/test_fakeprovider_stageexecutor.py` 通过后做一个聚焦实现 commit。只 stage 本 slice 的 provider、StageExecutor、evidence-writer support、fixtures 和 tests。
 
-## 11. Risks and scope traps
+## 11. 风险与范围陷阱
 
-- Turning StageExecutor into a hidden WorkflowLoopEngine.
-- Letting provider failure modes contain policy bypass or evasion behavior.
-- Allowing providers to write official workspace paths.
-- Treating a registered artifact as active because it is latest.
-- Adding real provider clients before deterministic FakeProvider evidence is proven.
+- 将 StageExecutor 变成隐藏的 WorkflowLoopEngine。
+- 让 provider failure modes 包含 policy bypass 或 evasion behavior。
+- 允许 providers 写 official workspace paths。
+- 因为 artifact 最新就把 registered artifact 当作 active。
+- 在 deterministic FakeProvider evidence 被证明之前添加真实 provider clients。
 
-## 12. Codex implementation prompt
+## 12. Codex 实现 prompt
 
 ```text
 Goal:
-Implement Slice 04, deterministic FakeProvider modes and the StageExecutor evidence boundary.
+实现 Slice 04，即 deterministic FakeProvider modes 和 StageExecutor evidence boundary。
 
 Source documents:
 - AGENTS.md

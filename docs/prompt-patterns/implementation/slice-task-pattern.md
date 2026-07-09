@@ -1,140 +1,140 @@
-# Implementation Slice Task Pattern
+# 实现切片任务 Pattern
 
-This is a lightweight reusable pattern for MVP-0 implementation slice tasks.
+这是一个面向 MVP-0 implementation slice tasks 的轻量可复用模式。
 
-It is based on the Slice 01-07 documents under `docs/implementation/mvp0-fakeprovider-slice/slices/`. It must not broaden a slice beyond its slice document.
+它基于 `docs/implementation/mvp0-fakeprovider-slice/slices/` 下的 Slice 01-07 文档。它不得把某个 slice 扩大到超出对应 slice document 的范围。
 
-## Use For
+## 适用场景
 
 - MVP-0 backend implementation slices
-- Small vertical implementation tasks with clear file boundaries
-- Codex tasks that must end with tests, command output, and diff review
+- 有清晰文件边界的小型垂直实现任务
+- 必须以测试、命令输出和 diff review 收尾的 Codex tasks
 
-Do not use it to generate a new product roadmap, detailed design baseline, or real Codex prompt unless a specific slice is being prepared for execution.
+不要用它生成新的产品路线图、详细设计基线或真实 Codex prompt，除非正在准备执行某个具体 slice。
 
-## Goal
+## 目标
 
-State the exact slice objective in one or two paragraphs.
+用一到两段说明精确 slice objective。
 
-Include:
+包含：
 
-- what this slice proves;
-- why it comes now;
-- what it deliberately does not implement;
-- the product stage it supports.
+- 这个 slice 证明什么；
+- 为什么现在做；
+- 它有意不实现什么；
+- 它支持的产品阶段。
 
-## Source Documents
+## 来源文档
 
-List only documents needed for the slice.
+只列出 slice 需要的文档。
 
-Typical sources:
+典型来源：
 
 - `AGENTS.md`
 - `docs/SRS-v1.0.md`
 - `docs/HLD.md`
-- relevant final detailed designs;
-- relevant MVP-0 implementation package files;
-- the exact slice document.
+- 相关最终详细设计；
+- 相关 MVP-0 implementation package files；
+- 精确 slice document。
 
-Avoid adding broad source lists that encourage the agent to re-open settled design decisions.
+避免添加过宽来源清单，以免诱导 agent 重新打开已经收敛的设计决策。
 
-## Allowed Files
+## 允许文件
 
-List exact files or directories the implementation may change.
+列出实现可以修改的精确文件或目录。
 
-Keep the list narrow enough that the diff can be reviewed quickly. Include tests and fixtures explicitly.
+清单应足够窄，使 diff 能快速 review。显式包含 tests 和 fixtures。
 
-## Forbidden Files
+## 禁止文件
 
-List files and categories the implementation must not touch.
+列出实现不得触碰的文件和类别。
 
-Typical forbidden areas:
+典型禁止范围：
 
-- unrelated source code;
-- UI/API/frontend files unless the slice is about them;
-- real providers when the slice uses FakeProvider;
-- export output, ZIP, manifest, or `ExportRecord` unless the slice is about export;
-- `docs/design/**/final/**`;
-- secrets, logs, caches, build outputs, local config, and AI runtime files.
+- 无关 source code；
+- UI / API / frontend files，除非 slice 处理它们；
+- 使用 FakeProvider 的 slice 中的真实 providers；
+- export output、ZIP、manifest 或 `ExportRecord`，除非 slice 处理 export；
+- `docs/design/**/final/**`；
+- secrets、logs、caches、build outputs、local config 和 AI runtime files。
 
-## Implementation Boundaries
+## 实现边界
 
-State the architectural rules the slice must preserve.
+说明 slice 必须保持的架构规则。
 
-Examples:
+示例：
 
-- Repository / DAO is the only SQLite access entry.
-- Provider adapters must not access SQLite.
-- Provider adapters must not register official artifacts.
-- StageExecutor must not update active pointers or create WorkflowDecision.
-- ArtifactService must not decide retry, fallback, warning, block, or readiness.
-- WorkflowLoopEngine owns workflow decisions.
-- Active output selection must not use timestamps or Page.status alone.
+- Repository / DAO 是唯一 SQLite 访问入口。
+- Provider adapters 不得访问 SQLite。
+- Provider adapters 不得登记 official artifacts。
+- StageExecutor 不得更新 active pointers 或创建 WorkflowDecision。
+- ArtifactService 不得决定 retry、fallback、warning、block 或 readiness。
+- WorkflowLoopEngine 拥有 workflow decisions。
+- Active output selection 不得使用 timestamps 或仅依赖 Page.status。
 
-## Validation Command
+## 验证命令
 
-Provide one focused command, usually a pytest target:
+提供一个聚焦命令，通常是 pytest target：
 
 ```bash
 pytest tests/integration/test_<slice_name>.py
 ```
 
-If multiple commands are required, explain why. Prefer focused integration tests over broad full-suite runs during early slice work.
+如果需要多个命令，解释原因。在早期 slice 工作中，优先使用聚焦 integration tests，而不是宽泛 full-suite runs。
 
-## Expected Output
+## 预期输出
 
-Describe the observable result after implementation:
+描述实现后的可观察结果：
 
-- files or modules that should exist;
-- behavior that should pass;
-- evidence persisted or exposed;
-- failure paths covered;
-- what remains intentionally absent.
+- 应存在的 files 或 modules；
+- 应通过的 behavior；
+- 持久化或暴露的 evidence；
+- 覆盖的 failure paths；
+- 仍然有意缺席的内容。
 
-## Commit Rule
+## Commit 规则
 
-Default rule:
+默认规则：
 
 ```text
 Do not commit unless explicitly allowed.
 ```
 
-If commits are allowed, require one focused slice commit after validation passes. Stage only files allowed for the slice.
+如果允许 commits，要求验证通过后做一个聚焦 slice commit。只 stage slice 允许的文件。
 
-## Stop Conditions
+## 停止条件
 
-Stop and report when:
+遇到以下情况停止并报告：
 
-- unrelated dirty working tree exists;
-- the slice requires forbidden files;
-- the slice needs a broader design decision;
-- validation cannot run for an unrelated reason;
-- implementing the slice would require UI, API, real providers, export output, or batch-scale behavior outside the slice;
-- an architecture invariant would be violated.
+- 存在 unrelated dirty working tree；
+- slice 需要 forbidden files；
+- slice 需要更广泛的设计决策；
+- validation 无法因无关原因运行；
+- 实现 slice 会要求 UI、API、真实 providers、export output 或 slice 外的 batch-scale behavior；
+- 某个 architecture invariant 会被违反。
 
-## Final Report Requirements
+## 最终报告要求
 
-The final report should include:
+最终报告应包含：
 
-- files changed;
-- what was implemented;
-- tests or commands run;
-- pass/fail result;
-- what was skipped and why;
-- risks that remain;
-- confirmation that forbidden files and final design baselines were not changed.
+- files changed；
+- what was implemented；
+- tests or commands run；
+- pass / fail result；
+- what was skipped and why；
+- risks that remain；
+- 确认 forbidden files 和 final design baselines 未被修改。
 
-Do not claim success if validation was not performed.
+如果未执行 validation，不要声称成功。
 
-## Harness Principles For Implementation Tasks
+## 实现任务的 Harness 原则
 
-- The real harness for implementation is not the prompt text; it is validation by tests, commands, diffs, file boundaries, and reviewable evidence.
-- Each implementation task should make Codex report what it changed, what it ran, what passed, what was skipped, and where risk remains.
-- Prefer pytest and focused integration tests over a new custom harness runtime.
-- Do not build a custom agent loop or Superpowers-like framework for this project.
-- Add repo-side scripts or checkers only after repeated failures justify them.
+- 实现的真实 harness 不是 prompt text；而是 tests、commands、diffs、file boundaries 和可 review evidence。
+- 每个实现任务都应让 Codex 报告改了什么、运行了什么、通过了什么、跳过了什么、风险在哪里。
+- 优先 pytest 和聚焦 integration tests，而不是新的自定义 harness runtime。
+- 不要为本项目构建自定义 agent loop 或类似 Superpowers 的框架。
+- 只有当重复失败证明有必要时，才添加 repo-side scripts 或 checkers。
 
-## Minimal Reusable Skeleton
+## 最小可复用骨架
 
 ```text
 Goal:
@@ -191,6 +191,6 @@ Final report:
 
 ## Scope Guard
 
-This pattern is only a shell for turning an existing slice document into a real task prompt.
+本 pattern 只是把现有 slice document 转换成真实 task prompt 的外壳。
 
-It must not add capabilities beyond the slice document. If the slice document says "ready_for_export only," the generated prompt must not ask for actual export output. If the slice document says FakeProvider only, the generated prompt must not ask for real provider integration.
+它不得增加 slice document 之外的能力。如果 slice document 说 “ready_for_export only”，生成的 prompt 就不得要求实际 export output。如果 slice document 说 FakeProvider only，生成的 prompt 就不得要求真实 provider integration。

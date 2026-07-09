@@ -1,30 +1,30 @@
-# Slice 02: Repository and Unit of Work Core
+# Slice 02：Repository and Unit of Work Core
 
-## 1. Objective
+## 1. 目标
 
-Plan the minimal repository contracts and Unit of Work boundaries required by the FakeProvider backend slice.
+规划 FakeProvider 后端切片所需的最小 repository contracts 和 Unit of Work 边界。
 
-This slice creates the persistence access shape for content state, result versions, workflow evidence, quality issues, artifact metadata, glossary versions, and readiness queries without exposing SQLite, cursors, ORM sessions, or table-shaped generic repositories to workflow modules.
+本 slice 创建 persistence access shape，用于 content state、result versions、workflow evidence、quality issues、artifact metadata、glossary versions 和 readiness queries，同时不向 workflow modules 暴露 SQLite、cursors、ORM sessions 或 table-shaped generic repositories。
 
-## 2. Why this slice comes now
+## 2. 为什么现在做这个 slice
 
-ArtifactService, StageExecutor, QualityCheckService integration, WorkflowLoopEngine acceptance, idempotency, and recovery all need repository boundaries before they can be implemented safely. This slice comes before import and provider execution so later code cannot grow ad hoc SQLite access in services.
+ArtifactService、StageExecutor、QualityCheckService integration、WorkflowLoopEngine acceptance、idempotency 和 recovery 都需要 repository boundaries，之后才能安全实现。本 slice 位于 import 和 provider execution 之前，以防后续 service 中滋生 ad hoc SQLite access。
 
-Decisions:
+决策：
 
-- Implement named repository groups instead of a generic `Repository<T>`.
-- Keep SQLite access behind Repository / DAO only.
-- Use named Unit of Work operations for lifecycle, import, attempt reservation, tool evidence, artifact metadata, acceptance, and recovery repair.
-- Introduce a narrow `StageEvidenceWriter` for StageExecutor.
-- Reserve the acceptance transaction shape before the happy path uses it.
+- 实现命名 repository groups，而不是 generic `Repository<T>`。
+- SQLite access 只通过 Repository / DAO。
+- 为 lifecycle、import、attempt reservation、tool evidence、artifact metadata、acceptance 和 recovery repair 使用命名 Unit of Work operations。
+- 为 StageExecutor 引入窄接口 `StageEvidenceWriter`。
+- 在 happy path 使用 acceptance transaction 之前，先预留其形态。
 
-Rejected alternatives:
+被拒绝的备选方案：
 
-- Generic CRUD repositories, because they leak table shape and invite business decisions in persistence.
-- Passing SQL sessions or connections into WorkflowLoopEngine or StageExecutor.
-- Letting StageExecutor write active pointers, QualityIssues, WorkflowDecisions, retry budget, or stage completion.
+- Generic CRUD repositories，因为它们泄漏 table shape，并诱导业务决策进入 persistence。
+- 将 SQL sessions 或 connections 传入 WorkflowLoopEngine 或 StageExecutor。
+- 允许 StageExecutor 写 active pointers、QualityIssues、WorkflowDecisions、retry budget 或 stage completion。
 
-## 3. Inputs from prior designs
+## 3. 来自先前设计的输入
 
 - `docs/design/persistence/final/repository-contract-minimal.md`
 - `docs/design/persistence/final/unit-of-work-and-transactions.md`
@@ -35,31 +35,31 @@ Rejected alternatives:
 - `docs/implementation/mvp0-fakeprovider-slice/HARNESS.md`
 - `docs/implementation/mvp0-fakeprovider-slice/PLAN.md`
 
-## 4. Allowed files or directories to change during implementation
+## 4. 实现期间允许修改的文件或目录
 
-For the future implementation task only:
+仅适用于未来实现任务：
 
 - `src/manga_read_flow/persistence/**`
-- `src/manga_read_flow/domain/**` for minimal DTO/value objects used by repository contracts.
-- `src/manga_read_flow/workflow/**` only for contract-facing DTOs needed to compile repository tests.
+- `src/manga_read_flow/domain/**`，用于 repository contracts 需要的最小 DTO / value objects。
+- `src/manga_read_flow/workflow/**`，仅用于让 repository tests 能编译的 contract-facing DTOs。
 - `tests/integration/test_repository_uow_core.py`
 - `tests/conftest.py`
-- `tests/fixtures/**` only for small persistence fixtures.
+- `tests/fixtures/**`，仅限小型 persistence fixtures。
 
-## 5. Forbidden changes
+## 5. 禁止变更
 
-- Provider adapter code that accesses repositories or SQLite.
-- StageExecutor writes beyond `StageEvidenceWriter`.
-- WorkflowLoopEngine implementation of the full happy path.
-- ArtifactService file promotion or official artifact lifecycle implementation beyond metadata contract stubs needed for tests.
-- UI/API/routes/frontend files.
-- Real provider integrations, real prompt templates, export output, ZIP, manifest, or `ExportRecord`.
-- Broad schema redesign or previous final design doc edits.
+- 访问 repositories 或 SQLite 的 Provider adapter code。
+- 超出 `StageEvidenceWriter` 的 StageExecutor writes。
+- WorkflowLoopEngine 完整 happy path 实现。
+- ArtifactService file promotion 或 official artifact lifecycle 实现，除测试需要的 metadata contract stubs 外。
+- UI / API / routes / frontend files。
+- 真实 provider integrations、真实 prompt templates、export output、ZIP、manifest 或 `ExportRecord`。
+- 大范围 schema redesign 或先前 final design doc edits。
 
-## 6. Implementation tasks
+## 6. 实现任务
 
-1. Inspect branch and `git status --short`; stop if unrelated changes exist.
-2. Add repository contract interfaces or concrete minimal modules for:
+1. 检查 branch 和 `git status --short`；如果存在 unrelated changes，停止。
+2. 为以下内容添加 repository contract interfaces 或 concrete minimal modules：
    - ProjectIdentityRepository
    - ContentStateRepository
    - ResultVersionRepository
@@ -68,53 +68,53 @@ For the future implementation task only:
    - QualityIssueRepository
    - ArtifactMetadataRepository
    - ReadinessQueryRepository
-3. Add named Unit of Work helpers for short transactions, keeping implementation details hidden.
-4. Add an acceptance transaction placeholder with expected-state guard inputs and a visible conflict outcome.
-5. Add `StageEvidenceWriter` with only ToolRunLog and narrow attempt evidence operations.
-6. Add tests proving workflow-facing code can use repository contracts without SQL/session handles.
-7. Add tests proving provider code has no repository dependency.
-8. Add tests proving StageExecutor-facing evidence writes cannot update active pointers, QualityIssues, WorkflowDecisions, or retry budget.
+3. 添加用于短事务的命名 Unit of Work helpers，并隐藏实现细节。
+4. 添加 acceptance transaction placeholder，包含 expected-state guard inputs 和可见 conflict outcome。
+5. 添加 `StageEvidenceWriter`，只包含 ToolRunLog 和窄 attempt evidence operations。
+6. 添加测试，证明 workflow-facing code 可以使用 repository contracts，而不需要 SQL / session handles。
+7. 添加测试，证明 provider code 没有 repository dependency。
+8. 添加测试，证明 StageExecutor-facing evidence writes 不能更新 active pointers、QualityIssues、WorkflowDecisions 或 retry budget。
 
-## 7. Validation command or test target
+## 7. 验证命令或测试目标
 
 ```bash
 pytest tests/integration/test_repository_uow_core.py
 ```
 
-## 8. Acceptance criteria
+## 8. 验收标准
 
-- Repository contracts hide SQLite details from callers.
-- No workflow-facing test uses SQL strings, ORM sessions, cursors, or table-shaped row dictionaries.
-- `StageEvidenceWriter` can create/update ToolRunLog and narrow attempt evidence only.
-- Provider adapter modules have no repository or SQLite dependency.
-- Acceptance transaction shape can represent accepted results, active pointers, issue lifecycle, WorkflowDecision, retry budget, task progress, stage statuses, and expected-state conflict.
-- No generic `Repository<T>` abstraction is introduced.
+- Repository contracts 向调用方隐藏 SQLite details。
+- 没有 workflow-facing test 使用 SQL strings、ORM sessions、cursors 或 table-shaped row dictionaries。
+- `StageEvidenceWriter` 只能创建 / 更新 ToolRunLog 和窄 attempt evidence。
+- Provider adapter modules 没有 repository 或 SQLite dependency。
+- Acceptance transaction shape 能表示 accepted results、active pointers、issue lifecycle、WorkflowDecision、retry budget、task progress、stage statuses 和 expected-state conflict。
+- 不引入 generic `Repository<T>` 抽象。
 
-## 9. Failure cases to test
+## 9. 需要测试的失败场景
 
-- Expected active pointer guard fails and acceptance returns a conflict/reload outcome.
-- StageEvidenceWriter caller tries to perform a forbidden write and the API does not expose that capability.
-- Provider adapter import path cannot reach repository modules.
-- Repository access before verified Project context remains blocked from Slice 01.
-- Attempt reservation avoids duplicate runner claim through expected task status/current stage guard.
+- Expected active pointer guard 失败，acceptance 返回 conflict / reload outcome。
+- StageEvidenceWriter caller 尝试执行 forbidden write，而 API 不暴露该 capability。
+- Provider adapter import path 无法触达 repository modules。
+- Slice 01 中 verified Project context 之前仍阻塞 repository access。
+- Attempt reservation 通过 expected task status / current stage guard 避免重复 runner claim。
 
-## 10. Commit strategy
+## 10. Commit 策略
 
-Use one small implementation commit after `pytest tests/integration/test_repository_uow_core.py` passes, if commits are explicitly allowed for that implementation task. Stage only repository/UoW contract and test files from this slice.
+如果该实现任务明确允许 commits，则在 `pytest tests/integration/test_repository_uow_core.py` 通过后做一个小实现 commit。只 stage 本 slice 的 repository / UoW contract 和 test files。
 
-## 11. Risks and scope traps
+## 11. 风险与范围陷阱
 
-- Building a full ORM layer or DDL suite before the FakeProvider slice needs it.
-- Letting convenience APIs expose sessions to WorkflowLoopEngine.
-- Making QualityCheckService persistence-aware too early.
-- Giving StageExecutor broad repository access because it is near provider execution.
-- Hiding conflict handling as a generic exception instead of a workflow-decision input.
+- 在 FakeProvider slice 需要之前构建完整 ORM layer 或 DDL suite。
+- 为方便而向 WorkflowLoopEngine 暴露 sessions。
+- 过早让 QualityCheckService 感知 persistence。
+- 因 StageExecutor 靠近 provider execution 而给它 broad repository access。
+- 将 conflict handling 隐藏成 generic exception，而不是 workflow-decision input。
 
-## 12. Codex implementation prompt
+## 12. Codex 实现 prompt
 
 ```text
 Goal:
-Implement Slice 02, the minimal repository and Unit of Work core for MVP-0 FakeProvider backend tests.
+实现 Slice 02，即 MVP-0 FakeProvider backend tests 所需的最小 repository 和 Unit of Work core。
 
 Source documents:
 - AGENTS.md

@@ -1,7 +1,7 @@
-# Workflow State / Workflow Loop Detailed Design
+# Workflow State / Workflow Loop 详细设计
 
-This directory contains the Goal 1 design package for Workflow-State Core Design.
+本目录包含 Goal 1 的 Workflow-State Core Design 设计包。
 
-This design package defines how the MVP workflow progresses across stages, how retry/fallback/skip/warning/block decisions are made, how stale state propagates, and how recovery is performed after interruption or crash.
+本设计包定义 MVP workflow 如何跨阶段推进，如何做出 retry / fallback / skip / warning / block 决策，stale state 如何传播，以及中断或崩溃后如何恢复。
 
-This is a design-only package. It must not include implementation code, SQL DDL, ORM mappings, API routes, UI components, or real Provider integration.
+本目录仅包含设计文档。不得包含实现代码、SQL DDL、ORM mappings、API routes、UI components 或真实 Provider integration。

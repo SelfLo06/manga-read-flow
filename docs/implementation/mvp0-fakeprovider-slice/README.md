@@ -1,23 +1,23 @@
-# MVP-0 FakeProvider Single-Page Backend Slice
+# MVP-0 FakeProvider 单 Page 后端切片
 
-This directory contains the completed implementation planning package for Goal 4.
+本目录包含 Goal 4 已完成的实现规划包。
 
-Scope:
+范围：
 
-* Plan the minimal backend implementation slices for one Project, one Batch, one Page, and deterministic FakeProvider workflow.
-* Use real temporary SQLite files and filesystem artifacts.
-* Prove persistence, workflow, artifact, issue, decision, recovery, and idempotency boundaries before real provider integration.
-* Stop at `ready_for_export`.
+* 规划一个 Project、一个 Batch、一个 Page 和 deterministic FakeProvider workflow 的最小后端实现切片。
+* 使用真实临时 SQLite files 和 filesystem artifacts。
+* 在真实 provider integration 之前证明 persistence、workflow、artifact、issue、decision、recovery 和 idempotency 边界。
+* 止步于 `ready_for_export`。
 
-Out of scope:
+范围外：
 
-* Production implementation in this planning step.
-* Full Web UI.
-* FastAPI route design.
-* Real OCR, translation, cleaning, or typesetting provider integration.
-* Real translation prompt templates.
-* Actual export output, ZIP, manifest, and ExportRecord implementation.
-* Batch-scale workflow.
-* P1/P2 features.
+* 本规划步骤中的生产实现。
+* 完整 Web UI。
+* FastAPI route design。
+* 真实 OCR、translation、cleaning 或 typesetting provider integration。
+* 真实 translation prompt templates。
+* 实际 export output、ZIP、manifest 和 ExportRecord 实现。
+* Batch-scale workflow。
+* P1 / P2 features。
 
-This package has produced implementation-ready slices, validation commands, file boundaries, commit strategy, review, open questions, and Codex task prompts. The next implementation step is Slice 01: Foundation and Project Store.
+本包已经产出 implementation-ready slices、validation commands、file boundaries、commit strategy、review、open questions 和 Codex task prompts。下一步实现是 Slice 01：Foundation and Project Store。
