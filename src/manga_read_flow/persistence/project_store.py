@@ -10,8 +10,10 @@ from typing import Self
 from urllib.parse import quote
 from uuid import uuid4
 
-from manga_read_flow.persistence.repository_uow_core import (
+from manga_read_flow.persistence.artifact_metadata_repository import (
     ArtifactMetadataRepository,
+)
+from manga_read_flow.persistence.repository_uow_core import (
     ContentStateRepository,
     GlossaryRepository,
     ProjectUnitOfWork,
@@ -30,7 +32,7 @@ APP_BASELINE_CHECKSUM = sha256(
     b"app_baseline_v1:projects:schema_migrations"
 ).hexdigest()
 PROJECT_BASELINE_CHECKSUM = sha256(
-    b"project_baseline_v1:project_metadata:schema_migrations:repository_uow_core"
+    b"project_baseline_v1:project_metadata:schema_migrations:repository_uow_core:artifactservice_import"
 ).hexdigest()
 
 
