@@ -86,6 +86,7 @@ class StageResult:
     candidate_outputs: dict[str, object]
     registered_artifacts: tuple[ProcessingArtifactSnapshot, ...] = ()
     artifact_errors: tuple[StageArtifactError, ...] = ()
+    tool_run_id: str | None = None
 
 
 class StageExecutor:
@@ -180,6 +181,7 @@ class StageExecutor:
             candidate_outputs=provider_result.payload,
             registered_artifacts=registered_artifacts,
             artifact_errors=artifact_errors,
+            tool_run_id=context.tool_run_id,
         )
 
 

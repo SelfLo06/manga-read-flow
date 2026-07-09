@@ -2,13 +2,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from hashlib import sha256
-import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from uuid import uuid4
 
-from manga_read_flow.domain.provider_contracts import ProviderOutcome, ProviderResult
 from manga_read_flow.providers.fake import FakeProvider
+from manga_read_flow.quality import (
+    QualityCheckInput,
+    QualityCheckReport,
+    QualityCheckService,
+)
 from manga_read_flow.persistence.repository_uow_core import (
     AcceptanceCommand,
     AcceptedResult,
@@ -22,6 +25,9 @@ from manga_read_flow.persistence.repository_uow_core import (
     TaskProgressUpdate,
     WorkflowDecisionDraft,
 )
+from manga_read_flow.workflow.detection_outputs import detected_text_blocks
+from manga_read_flow.workflow.quality_acceptance import issue_changes_from_drafts
+from manga_read_flow.workflow.stage_results import stage_error_code, synthetic_stage_result
 from manga_read_flow.workflow.stage_executor import (
     StageExecutionConflictError,
     StageExecutionContext,
@@ -58,18 +64,20 @@ class WorkflowLoopEngine:
         artifact_service,
         stage_executor: StageExecutor,
         provider: FakeProvider,
+        quality_check_service: QualityCheckService | None = None,
     ) -> None:
         self._repositories = repositories
         self._artifact_service = artifact_service
         self._stage_executor = stage_executor
         self._provider = provider
+        self._quality_check_service = quality_check_service or QualityCheckService()
         self._project_id = repositories.identity.get_metadata().project_id
 
     def run_task(self, task_id: str) -> ProcessPageResult:
         while True:
             task = self._repositories.workflow_execution.get_task(task_id)
             page = self._repositories.content_state.get_page(task.target_id)
-            if task.status in {"succeeded", "blocked", "failed"}:
+            if task.status in {"succeeded", "succeeded_with_warnings", "blocked", "failed"}:
                 return ProcessPageResult(
                     task_id=task.task_id,
                     task_status=task.status,
@@ -92,19 +100,9 @@ class WorkflowLoopEngine:
                     page_status=page.status,
                     final_decision="reload_required",
                 )
-            if stage_result.status != "succeeded":
-                error_code = _stage_error_code(stage_result)
-                return self._accept_blocked(
-                    task_id=task.task_id,
-                    page_id=page.page_id,
-                    task_status=task.status,
-                    current_stage=task.current_stage,
-                    attempt_id=stage_result.attempt_id,
-                    reason_code=error_code,
-                    issue_type=error_code,
-                )
+            quality_report = self._quality_report(task, page, stage_result)
 
-            acceptance = self._accept_stage(task, page, stage_result)
+            acceptance = self._accept_stage(task, page, stage_result, quality_report)
             if not acceptance.committed:
                 return ProcessPageResult(
                     task_id=task.task_id,
@@ -113,7 +111,12 @@ class WorkflowLoopEngine:
                     page_status=page.status,
                     final_decision="reload_required",
                 )
-            if acceptance.task_status in {"succeeded", "blocked", "failed"}:
+            if acceptance.task_status in {
+                "succeeded",
+                "succeeded_with_warnings",
+                "blocked",
+                "failed",
+            }:
                 latest_page = self._repositories.content_state.get_page(page.page_id)
                 return ProcessPageResult(
                     task_id=task.task_id,
@@ -193,19 +196,60 @@ class WorkflowLoopEngine:
                 )
         return None
 
-    def _accept_stage(self, task, page, stage_result: StageResult):
+    def _quality_report(self, task, page, stage_result: StageResult) -> QualityCheckReport:
+        error = stage_result.provider_result.error
+        return self._quality_check_service.check(
+            QualityCheckInput(
+                stage=stage_result.stage,
+                target_type=stage_result.target_type,
+                target_id=stage_result.target_id,
+                batch_id=page.batch_id,
+                page_id=page.page_id,
+                text_block_ids=tuple(
+                    block.text_block_id
+                    for block in self._repositories.content_state.list_text_blocks_for_page(
+                        page.page_id
+                    )
+                ),
+                provider_outcome=stage_result.provider_result.outcome.value,
+                error_kind=error.kind if error is not None else None,
+                error_code=stage_error_code(stage_result)
+                if stage_result.status != "succeeded"
+                else None,
+                is_provider_refusal=error.is_provider_refusal
+                if error is not None
+                else False,
+                workflow_attempt_id=stage_result.attempt_id,
+                tool_run_id=stage_result.tool_run_id,
+                input_hash=_hash_text(f"{task.task_id}:{stage_result.stage}:input"),
+                config_hash=_hash_text("fakeprovider-default-config"),
+                candidate_outputs=stage_result.candidate_outputs,
+                registered_artifact_ids=tuple(
+                    artifact.artifact_id
+                    for artifact in stage_result.registered_artifacts
+                ),
+            )
+        )
+
+    def _accept_stage(
+        self,
+        task,
+        page,
+        stage_result: StageResult,
+        quality_report: QualityCheckReport,
+    ):
         if stage_result.stage == "detection":
             return self._accept_detection(task, page, stage_result)
         if stage_result.stage == "ocr":
             return self._accept_ocr(task, page, stage_result)
         if stage_result.stage == "translation":
-            return self._accept_translation(task, page, stage_result)
+            return self._accept_translation(task, page, stage_result, quality_report)
         if stage_result.stage == "translation_check":
             return self._accept_stage_status_only(task, page, stage_result)
         if stage_result.stage == "cleaning":
-            return self._accept_page_artifact(task, page, stage_result)
+            return self._accept_cleaning(task, page, stage_result, quality_report)
         if stage_result.stage == "typesetting":
-            return self._accept_page_artifact(task, page, stage_result)
+            return self._accept_typesetting(task, page, stage_result, quality_report)
         if stage_result.stage == "export_check":
             return self._accept_export_check(task, page, stage_result)
         raise ValueError(f"Unsupported stage: {stage_result.stage}")
@@ -232,7 +276,7 @@ class WorkflowLoopEngine:
                         detection_provider=stage_result.provider_result.provider_name,
                         detection_confidence=text_block.confidence,
                     )
-                    for text_block in _detected_text_blocks(
+                    for text_block in detected_text_blocks(
                         page.page_id,
                         stage_result.candidate_outputs,
                     )
@@ -311,7 +355,25 @@ class WorkflowLoopEngine:
             )
         )
 
-    def _accept_translation(self, task, page, stage_result: StageResult):
+    def _accept_translation(
+        self,
+        task,
+        page,
+        stage_result: StageResult,
+        quality_report: QualityCheckReport,
+    ):
+        if stage_result.status in {"invalid_output", "refused", "failed"}:
+            return self._accept_quality_block(
+                task,
+                page,
+                stage_result,
+                quality_report,
+                reason_code=stage_error_code(stage_result),
+                attempt_terminal_status="refused"
+                if stage_result.status == "refused"
+                else "failed",
+            )
+
         glossary_version_id = self._repositories.glossary.ensure_empty_version()
         ocr_inputs = self._repositories.result_versions.active_ocr_inputs_for_page(
             page.page_id
@@ -323,8 +385,23 @@ class WorkflowLoopEngine:
         accepted_results = []
         active_pointers = []
         stage_statuses = []
+        missing_block_ids = {
+            draft.target_id
+            for draft in quality_report.issue_drafts
+            if draft.issue_type == "translation_missing_block"
+        }
         for row in ocr_inputs:
             text_block_id = row.text_block_id
+            if text_block_id in missing_block_ids:
+                stage_statuses.append(
+                    StageStatusUpdate(
+                        target_type="text_block",
+                        target_id=text_block_id,
+                        stage="translation",
+                        status="blocked",
+                    )
+                )
+                continue
             result = result_by_block[text_block_id]
             result_id = f"translation-{text_block_id}-v1"
             translation_text = str(result["translation_text"])
@@ -362,6 +439,8 @@ class WorkflowLoopEngine:
                 )
             )
 
+        issue_changes = issue_changes_from_drafts(quality_report.issue_drafts)
+        has_blocker = quality_report.summary.has_blocking_issue
         return self._repositories.uow.accept_stage(
             self._command(
                 task_id=task.task_id,
@@ -369,14 +448,17 @@ class WorkflowLoopEngine:
                 current_stage=task.current_stage,
                 page=page,
                 stage_result=stage_result,
-                decision_type="continue",
-                reason_code="fake_translation_accepted",
-                next_stage="translation_check",
-                expected_translation={
-                    row.text_block_id: None for row in ocr_inputs
-                },
+                decision_type="block" if has_blocker else "continue",
+                reason_code="translation_missing_text_block"
+                if has_blocker
+                else "fake_translation_accepted",
+                next_stage="block" if has_blocker else "translation_check",
+                task_terminal_status="blocked" if has_blocker else "running",
+                page_status="blocked" if has_blocker else None,
+                expected_translation={row.text_block_id: None for row in ocr_inputs},
                 accepted_results=tuple(accepted_results),
                 active_pointers=tuple(active_pointers),
+                issue_lifecycle=issue_changes,
                 stage_statuses=tuple(stage_statuses),
                 expected_stage_statuses=tuple(
                     ExpectedStageStatus(
@@ -426,6 +508,135 @@ class WorkflowLoopEngine:
                 ),
             )
         )
+
+    def _accept_cleaning(
+        self,
+        task,
+        page,
+        stage_result: StageResult,
+        quality_report: QualityCheckReport,
+    ):
+        if quality_report.issue_drafts and not quality_report.summary.has_blocking_issue:
+            blocks = self._repositories.content_state.list_text_blocks_for_page(
+                page.page_id
+            )
+            return self._repositories.uow.accept_stage(
+                self._command(
+                    task_id=task.task_id,
+                    task_status=task.status,
+                    current_stage=task.current_stage,
+                    page=page,
+                    stage_result=stage_result,
+                    decision_type="mark_warning",
+                    reason_code="cleaning_complex_background",
+                    next_stage="typesetting",
+                    issue_lifecycle=issue_changes_from_drafts(
+                        quality_report.issue_drafts
+                    ),
+                    stage_statuses=tuple(
+                        StageStatusUpdate(
+                            target_type="text_block",
+                            target_id=block.text_block_id,
+                            stage="cleaning",
+                            status="skipped",
+                        )
+                        for block in blocks
+                    ),
+                    expected_stage_statuses=tuple(
+                        ExpectedStageStatus(
+                            target_type="text_block",
+                            target_id=block.text_block_id,
+                            stage="cleaning",
+                            status=block.cleaning_status,
+                        )
+                        for block in blocks
+                    ),
+                )
+            )
+        if quality_report.summary.has_blocking_issue or stage_result.status != "succeeded":
+            return self._accept_quality_block(
+                task,
+                page,
+                stage_result,
+                quality_report,
+                reason_code=stage_error_code(stage_result),
+            )
+        return self._accept_page_artifact(task, page, stage_result)
+
+    def _accept_typesetting(
+        self,
+        task,
+        page,
+        stage_result: StageResult,
+        quality_report: QualityCheckReport,
+    ):
+        if quality_report.issue_drafts and not quality_report.summary.has_blocking_issue:
+            if not stage_result.registered_artifacts:
+                return self._accept_quality_block(
+                    task,
+                    page,
+                    stage_result,
+                    quality_report,
+                    reason_code="typeset_overflow_without_preview",
+                )
+            artifact = stage_result.registered_artifacts[0]
+            blocks = self._repositories.content_state.list_text_blocks_for_page(
+                page.page_id
+            )
+            return self._repositories.uow.accept_stage(
+                self._command(
+                    task_id=task.task_id,
+                    task_status=task.status,
+                    current_stage=task.current_stage,
+                    page=page,
+                    stage_result=stage_result,
+                    decision_type="mark_warning",
+                    reason_code="typeset_overflow",
+                    next_stage="export_check",
+                    expected_page_artifacts={
+                        "active_cleaned_artifact_id": page.active_cleaned_artifact_id,
+                        "active_typeset_artifact_id": page.active_typeset_artifact_id,
+                    },
+                    active_pointers=(
+                        ActivePointerUpdate(
+                            owner_type="page",
+                            owner_id=page.page_id,
+                            pointer_name="active_typeset_artifact_id",
+                            value_id=artifact.artifact_id,
+                        ),
+                    ),
+                    issue_lifecycle=issue_changes_from_drafts(
+                        quality_report.issue_drafts
+                    ),
+                    stage_statuses=tuple(
+                        StageStatusUpdate(
+                            target_type="text_block",
+                            target_id=block.text_block_id,
+                            stage="typesetting",
+                            status="skipped",
+                        )
+                        for block in blocks
+                    ),
+                    expected_stage_statuses=tuple(
+                        ExpectedStageStatus(
+                            target_type="text_block",
+                            target_id=block.text_block_id,
+                            stage="typesetting",
+                            status=block.typesetting_status,
+                        )
+                        for block in blocks
+                    ),
+                )
+            )
+        if quality_report.summary.has_blocking_issue or stage_result.status != "succeeded":
+            return self._accept_quality_block(
+                task,
+                page,
+                stage_result,
+                quality_report,
+                reason_code=stage_error_code(stage_result),
+            )
+        return self._accept_page_artifact(task, page, stage_result)
 
     def _accept_page_artifact(self, task, page, stage_result: StageResult):
         if not stage_result.registered_artifacts:
@@ -487,8 +698,12 @@ class WorkflowLoopEngine:
         )
 
     def _accept_export_check(self, task, page, stage_result: StageResult):
-        readiness = self._repositories.readiness.get_page_export_readiness(page.page_id)
+        readiness = self._repositories.readiness.get_page_export_readiness(
+            page.page_id,
+            profile_snapshot_id=task.profile_snapshot_id,
+        )
         artifact_is_valid = False
+        warning_artifact_is_valid = False
         if readiness.active_typeset_artifact_id is not None:
             report = self._artifact_service.validate_artifact(
                 readiness.active_typeset_artifact_id,
@@ -500,12 +715,20 @@ class WorkflowLoopEngine:
                 and readiness.active_typeset_storage_state == "present"
                 and report.integrity_status == "valid"
             )
+            warning_artifact_is_valid = (
+                readiness.active_typeset_artifact_type
+                in {"typeset_image", "typeset_preview_image"}
+                and readiness.active_typeset_storage_state == "present"
+                and report.integrity_status == "valid"
+            )
 
         ready = (
             readiness.active_typeset_artifact_id is not None
             and artifact_is_valid
             and readiness.open_blocking_issue_count == 0
             and readiness.incomplete_text_block_count == 0
+            and readiness.unresolved_warning_issue_count == 0
+            and readiness.skipped_text_block_count == 0
         )
         if ready:
             return self._repositories.uow.accept_stage(
@@ -520,6 +743,51 @@ class WorkflowLoopEngine:
                     next_stage="finish_ready_for_export",
                     task_terminal_status="succeeded",
                     page_status="ready_for_export",
+                )
+            )
+
+        warning_ready = (
+            readiness.active_typeset_artifact_id is not None
+            and warning_artifact_is_valid
+            and readiness.open_blocking_issue_count == 0
+            and readiness.incomplete_text_block_count == 0
+            and (
+                readiness.unresolved_warning_issue_count > 0
+                or readiness.skipped_text_block_count > 0
+            )
+            and readiness.allow_warning_export
+        )
+        if warning_ready:
+            return self._repositories.uow.accept_stage(
+                self._command(
+                    task_id=task.task_id,
+                    task_status=task.status,
+                    current_stage=task.current_stage,
+                    page=page,
+                    stage_result=stage_result,
+                    decision_type="finish_ready_for_export_with_warnings",
+                    reason_code="export_readiness_passed_with_warnings",
+                    next_stage="finish_ready_for_export_with_warnings",
+                    task_terminal_status="succeeded_with_warnings",
+                    page_status="ready_for_export_with_warnings",
+                    linked_issue_ids=readiness.unresolved_issue_ids,
+                )
+            )
+
+        if readiness.unresolved_issue_ids:
+            return self._repositories.uow.accept_stage(
+                self._command(
+                    task_id=task.task_id,
+                    task_status=task.status,
+                    current_stage=task.current_stage,
+                    page=page,
+                    stage_result=stage_result,
+                    decision_type="block",
+                    reason_code="export_readiness_blocked",
+                    next_stage="block",
+                    task_terminal_status="blocked",
+                    page_status="blocked",
+                    linked_issue_ids=readiness.unresolved_issue_ids,
                 )
             )
 
@@ -569,6 +837,47 @@ class WorkflowLoopEngine:
             final_decision="block",
         )
 
+    def _accept_quality_block(
+        self,
+        task,
+        page,
+        stage_result: StageResult,
+        quality_report: QualityCheckReport,
+        *,
+        reason_code: str,
+        attempt_terminal_status: str = "failed",
+    ):
+        issue_changes = issue_changes_from_drafts(quality_report.issue_drafts)
+        if not issue_changes:
+            return self._repositories.uow.accept_stage(
+                self._blocked_command(
+                    task_id=task.task_id,
+                    task_status=task.status,
+                    current_stage=task.current_stage,
+                    page_id=page.page_id,
+                    page=page,
+                    attempt_id=stage_result.attempt_id,
+                    reason_code=reason_code,
+                    issue_type=reason_code,
+                )
+            )
+        return self._repositories.uow.accept_stage(
+            self._command(
+                task_id=task.task_id,
+                task_status=task.status,
+                current_stage=task.current_stage,
+                page=page,
+                stage_result=stage_result,
+                decision_type="block",
+                reason_code=reason_code,
+                next_stage="block",
+                task_terminal_status="blocked",
+                page_status="blocked",
+                issue_lifecycle=issue_changes,
+                attempt_terminal_status=attempt_terminal_status,
+            )
+        )
+
     def _blocked_command(
         self,
         *,
@@ -587,7 +896,7 @@ class WorkflowLoopEngine:
             task_status=task_status,
             current_stage=current_stage,
             page=page,
-            stage_result=_synthetic_stage_result(
+            stage_result=synthetic_stage_result(
                 task_id=task_id,
                 stage=current_stage,
                 page_id=page_id,
@@ -631,12 +940,17 @@ class WorkflowLoopEngine:
         issue_lifecycle: tuple[IssueLifecycleChange, ...] = (),
         stage_statuses: tuple[StageStatusUpdate, ...] = (),
         expected_stage_statuses: tuple[ExpectedStageStatus, ...] = (),
+        linked_issue_ids: tuple[str, ...] = (),
+        attempt_terminal_status: str | None = None,
     ) -> AcceptanceCommand:
         stage_index = _STAGE_ORDER.index(current_stage) + 1
         page_statuses = (
             (PageStatusUpdate(page_id=page.page_id, status=page_status),)
             if page_status is not None
             else ()
+        )
+        decision_issue_ids = linked_issue_ids or tuple(
+            issue_change.issue_id for issue_change in issue_lifecycle
         )
         return AcceptanceCommand(
             task_id=task_id,
@@ -663,6 +977,7 @@ class WorkflowLoopEngine:
                 stage=current_stage,
                 decision_type=decision_type,
                 reason_code=reason_code,
+                linked_issue_ids=decision_issue_ids,
             ),
             retry_budget_after={},
             task_progress=TaskProgressUpdate(
@@ -673,94 +988,9 @@ class WorkflowLoopEngine:
             stage_statuses=stage_statuses,
             accepted_text_blocks=accepted_text_blocks,
             page_statuses=page_statuses,
-            attempt_terminal_status="succeeded"
-            if task_terminal_status != "blocked"
-            else "failed",
+            attempt_terminal_status=attempt_terminal_status
+            or ("succeeded" if task_terminal_status != "blocked" else "failed"),
         )
-
-
-@dataclass(frozen=True)
-class _DetectedTextBlock:
-    text_block_id: str
-    reading_order: int
-    bbox_json: str
-    polygon_json: str
-    geometry_hash: str
-    confidence: float | None
-
-
-def _detected_text_blocks(
-    page_id: str,
-    candidate_outputs: dict[str, object],
-) -> tuple[_DetectedTextBlock, ...]:
-    blocks = candidate_outputs.get("text_blocks", ())
-    detected: list[_DetectedTextBlock] = []
-    for index, block in enumerate(blocks, start=1):
-        if not isinstance(block, dict):
-            raise ValueError("Detection output item must be an object.")
-        bbox = block.get("bbox")
-        if not isinstance(bbox, dict):
-            raise ValueError("Detection output must include a bbox object.")
-        bbox_json = json.dumps(bbox, sort_keys=True, separators=(",", ":"))
-        polygon_json = json.dumps(_bbox_polygon(bbox), separators=(",", ":"))
-        provider_ref = str(block.get("provider_block_ref") or f"tb-{page_id}-{index:03d}")
-        reading_order = int(block.get("reading_order") or index)
-        confidence = block.get("confidence")
-        detected.append(
-            _DetectedTextBlock(
-                text_block_id=provider_ref,
-                reading_order=reading_order,
-                bbox_json=bbox_json,
-                polygon_json=polygon_json,
-                geometry_hash=_hash_text(f"{page_id}:{provider_ref}:{bbox_json}"),
-                confidence=float(confidence) if confidence is not None else None,
-            )
-        )
-    return tuple(detected)
-
-
-def _bbox_polygon(bbox: dict[str, object]) -> list[list[float]]:
-    x = float(bbox["x"])
-    y = float(bbox["y"])
-    width = float(bbox["width"])
-    height = float(bbox["height"])
-    return [
-        [x, y],
-        [x + width, y],
-        [x + width, y + height],
-        [x, y + height],
-    ]
-
-
-def _stage_error_code(stage_result: StageResult) -> str:
-    if stage_result.artifact_errors:
-        return stage_result.artifact_errors[0].code
-    if stage_result.provider_result.error is not None:
-        return stage_result.provider_result.error.code
-    return "stage_failed"
-
-
-def _synthetic_stage_result(
-    *,
-    task_id: str,
-    stage: str,
-    page_id: str,
-    attempt_id: str | None,
-) -> StageResult:
-    return StageResult(
-        status="failed",
-        stage=stage,
-        task_id=task_id,
-        attempt_id=attempt_id,
-        target_type="page",
-        target_id=page_id,
-        provider_called=False,
-        provider_result=ProviderResult(
-            outcome=ProviderOutcome.FAILURE,
-            provider_name="workflow-loop",
-        ),
-        candidate_outputs={},
-    )
 
 
 def _hash_text(text: str) -> str:

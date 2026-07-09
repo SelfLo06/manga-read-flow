@@ -83,6 +83,25 @@ class IssueLifecycleChange:
     status: str
     issue_type: str
     is_blocking: bool
+    target_type: str | None = None
+    target_id: str | None = None
+    batch_id: str | None = None
+    page_id: str | None = None
+    text_block_id: str | None = None
+    discovered_stage: str | None = None
+    root_stage: str | None = None
+    error_code: str | None = None
+    severity: str | None = None
+    message_key: str | None = None
+    message_params_json: str | None = None
+    suggested_action_key: str | None = None
+    related_attempt_id: str | None = None
+    related_tool_run_id: str | None = None
+    related_artifact_id: str | None = None
+    applies_to_result_id: str | None = None
+    input_hash: str | None = None
+    config_hash: str | None = None
+    dedupe_key: str | None = None
 
 
 @dataclass(frozen=True)
@@ -92,6 +111,8 @@ class WorkflowDecisionDraft:
     stage: str
     decision_type: str
     reason_code: str
+    linked_issue_ids: tuple[str, ...] = ()
+    issue_relation_type: str = "caused_by"
 
 
 @dataclass(frozen=True)
@@ -543,20 +564,58 @@ def _apply_issue_change(
             INSERT INTO quality_issues (
                 issue_id,
                 project_id,
+                target_type,
+                target_id,
+                batch_id,
+                page_id,
+                text_block_id,
+                discovered_stage,
+                root_stage,
                 issue_type,
+                error_code,
+                severity,
                 status,
                 is_blocking,
+                message_key,
+                message_params_json,
+                suggested_action_key,
+                related_attempt_id,
+                related_tool_run_id,
+                related_artifact_id,
+                applies_to_result_id,
+                input_hash,
+                config_hash,
+                dedupe_key,
                 created_at,
                 updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 issue_change.issue_id,
                 project_id,
+                issue_change.target_type,
+                issue_change.target_id,
+                issue_change.batch_id,
+                issue_change.page_id,
+                issue_change.text_block_id,
+                issue_change.discovered_stage,
+                issue_change.root_stage,
                 issue_change.issue_type,
+                issue_change.error_code,
+                issue_change.severity,
                 issue_change.status,
                 int(issue_change.is_blocking),
+                issue_change.message_key,
+                issue_change.message_params_json,
+                issue_change.suggested_action_key,
+                issue_change.related_attempt_id,
+                issue_change.related_tool_run_id,
+                issue_change.related_artifact_id,
+                issue_change.applies_to_result_id,
+                issue_change.input_hash,
+                issue_change.config_hash,
+                issue_change.dedupe_key,
                 now,
                 now,
             ),
@@ -587,6 +646,7 @@ def _insert_workflow_decision(
     task_id: str,
     decision: WorkflowDecisionDraft,
 ) -> None:
+    now = utc_now()
     connection.execute(
         """
         INSERT INTO workflow_decisions (
@@ -609,9 +669,27 @@ def _insert_workflow_decision(
             decision.stage,
             decision.decision_type,
             decision.reason_code,
-            utc_now(),
+            now,
         ),
     )
+    for issue_id in decision.linked_issue_ids:
+        connection.execute(
+            """
+            INSERT INTO workflow_decision_issues (
+                decision_id,
+                issue_id,
+                relation_type,
+                created_at
+            )
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                decision.decision_id,
+                issue_id,
+                decision.issue_relation_type,
+                now,
+            ),
+        )
 
 
 def _apply_stage_status(
