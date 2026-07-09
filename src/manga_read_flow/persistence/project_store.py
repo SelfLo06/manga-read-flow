@@ -10,6 +10,19 @@ from typing import Self
 from urllib.parse import quote
 from uuid import uuid4
 
+from manga_read_flow.persistence.repository_uow_core import (
+    ArtifactMetadataRepository,
+    ContentStateRepository,
+    GlossaryRepository,
+    ProjectUnitOfWork,
+    QualityIssueRepository,
+    ReadinessQueryRepository,
+    ResultVersionRepository,
+    StageEvidenceWriter,
+    WorkflowExecutionRepository,
+    initialize_repository_core_schema,
+)
+
 
 APP_BASELINE_VERSION = "app_baseline_v1"
 PROJECT_BASELINE_VERSION = "project_baseline_v1"
@@ -17,7 +30,7 @@ APP_BASELINE_CHECKSUM = sha256(
     b"app_baseline_v1:projects:schema_migrations"
 ).hexdigest()
 PROJECT_BASELINE_CHECKSUM = sha256(
-    b"project_baseline_v1:project_metadata:schema_migrations"
+    b"project_baseline_v1:project_metadata:schema_migrations:repository_uow_core"
 ).hexdigest()
 
 
@@ -336,6 +349,42 @@ class ProjectRepositories:
             project_db_path=project_db_path,
             project_id=project_id,
         )
+        self.content_state = ContentStateRepository(
+            project_db_path=project_db_path,
+            project_id=project_id,
+        )
+        self.result_versions = ResultVersionRepository(
+            project_db_path=project_db_path,
+            project_id=project_id,
+        )
+        self.glossary = GlossaryRepository(
+            project_db_path=project_db_path,
+            project_id=project_id,
+        )
+        self.workflow_execution = WorkflowExecutionRepository(
+            project_db_path=project_db_path,
+            project_id=project_id,
+        )
+        self.quality_issues = QualityIssueRepository(
+            project_db_path=project_db_path,
+            project_id=project_id,
+        )
+        self.artifact_metadata = ArtifactMetadataRepository(
+            project_db_path=project_db_path,
+            project_id=project_id,
+        )
+        self.readiness = ReadinessQueryRepository(
+            project_db_path=project_db_path,
+            project_id=project_id,
+        )
+        self.uow = ProjectUnitOfWork(
+            project_db_path=project_db_path,
+            project_id=project_id,
+        )
+        self.stage_evidence_writer = StageEvidenceWriter(
+            project_db_path=project_db_path,
+            project_id=project_id,
+        )
 
 
 class ProjectIdentityRepository:
@@ -416,6 +465,7 @@ def _initialize_project_database(
             )
             """
         )
+        initialize_repository_core_schema(connection)
         _ensure_migration(
             connection,
             version=PROJECT_BASELINE_VERSION,
