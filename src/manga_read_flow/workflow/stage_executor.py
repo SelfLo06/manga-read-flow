@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Protocol
 
@@ -8,10 +8,12 @@ from manga_read_flow.artifacts.service import ArtifactRegistrationError
 from manga_read_flow.domain.artifacts import ArtifactSafetyMetadata
 from manga_read_flow.domain.artifacts import ProcessingArtifactSnapshot
 from manga_read_flow.domain.provider_contracts import (
+    ProviderIdentity,
     ProviderOutcome,
     ProviderRequest,
     ProviderResult,
     ProviderTempFileRef,
+    StageProvider,
 )
 from manga_read_flow.persistence.repository_uow_core import (
     AttemptEvidence,
@@ -20,16 +22,6 @@ from manga_read_flow.persistence.repository_uow_core import (
     ToolRunStart,
     UnitOfWorkOutcome,
 )
-
-
-class StageProvider(Protocol):
-    provider_name: str
-    model_id: str | None
-    tool_name: str
-    tool_version: str
-
-    def run(self, request: ProviderRequest) -> ProviderResult:
-        raise NotImplementedError
 
 
 class AttemptRecorder(Protocol):
@@ -96,6 +88,7 @@ class StageExecutor:
         self._artifact_service = artifact_service
 
     def execute(self, context: StageExecutionContext, provider: StageProvider) -> StageResult:
+        provider_identity = provider.identity
         context.attempt_temp_root.mkdir(parents=True, exist_ok=True)
         reservation = self._attempt_recorder.reserve_attempt(
             AttemptReservation(
@@ -121,16 +114,19 @@ class StageExecutor:
                 task_id=context.task_id,
                 attempt_id=context.attempt_id,
                 stage=context.stage,
-                tool_name=provider.tool_name,
-                tool_version=provider.tool_version,
-                provider_name=provider.provider_name,
-                model_id=provider.model_id,
+                tool_name=provider_identity.tool_name,
+                tool_version=provider_identity.tool_version,
+                provider_name=provider_identity.provider_name,
+                model_id=provider_identity.model_id,
                 input_hash=context.input_hash,
                 config_hash=context.config_hash,
             )
         )
 
-        provider_result = provider.run(_provider_request(context))
+        provider_result = _result_with_provider_identity(
+            provider.run(_provider_request(context)),
+            provider_identity,
+        )
         provider_status = _status_for_outcome(provider_result.outcome)
         error = provider_result.error
         self._evidence_writer.record_tool_outcome(
@@ -162,7 +158,7 @@ class StageExecutor:
                 attempt_id=context.attempt_id,
                 provider_name=provider_result.provider_name,
                 model_id=provider_result.model_id,
-                tool_name=provider.tool_name,
+                tool_name=provider_identity.tool_name,
                 status=stage_status,
                 error_code=attempt_error_code,
                 sanitized_message=attempt_message,
@@ -211,6 +207,22 @@ def _status_for_outcome(outcome: ProviderOutcome) -> str:
         ProviderOutcome.REFUSAL: "refused",
         ProviderOutcome.INVALID_OUTPUT: "invalid_output",
     }[outcome]
+
+
+def _result_with_provider_identity(
+    result: ProviderResult,
+    provider_identity: ProviderIdentity,
+) -> ProviderResult:
+    if (
+        result.provider_name == provider_identity.provider_name
+        and result.model_id == provider_identity.model_id
+    ):
+        return result
+    return replace(
+        result,
+        provider_name=provider_identity.provider_name,
+        model_id=provider_identity.model_id,
+    )
 
 
 def _register_temp_artifacts(

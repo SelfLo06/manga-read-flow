@@ -4,6 +4,7 @@ import struct
 import zlib
 
 from manga_read_flow.domain.provider_contracts import (
+    ProviderIdentity,
     ProviderError,
     ProviderOutcome,
     ProviderRequest,
@@ -17,6 +18,13 @@ class FakeProvider:
     model_id = "fake-model-v0"
     tool_name = "fake-provider"
     tool_version = "0.1"
+    identity = ProviderIdentity(
+        provider_name=provider_name,
+        provider_kind="fake",
+        model_id=model_id,
+        tool_name=tool_name,
+        tool_version=tool_version,
+    )
 
     def __init__(self, *, fake_mode: str) -> None:
         self._fake_mode = fake_mode

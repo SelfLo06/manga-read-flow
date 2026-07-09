@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
+from typing import Protocol
 
 
 class ProviderOutcome(str, Enum):
@@ -56,3 +57,19 @@ class ProviderResult:
     payload: dict[str, object] = field(default_factory=dict)
     error: ProviderError | None = None
     temp_files: tuple[ProviderTempFileRef, ...] = ()
+
+
+@dataclass(frozen=True)
+class ProviderIdentity:
+    provider_name: str
+    provider_kind: str
+    model_id: str | None
+    tool_name: str
+    tool_version: str
+
+
+class StageProvider(Protocol):
+    identity: ProviderIdentity
+
+    def run(self, request: ProviderRequest) -> ProviderResult:
+        ...

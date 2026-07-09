@@ -5,7 +5,7 @@ from hashlib import sha256
 import json
 from uuid import uuid4
 
-from manga_read_flow.providers.fake import FakeProvider
+from manga_read_flow.domain.provider_contracts import StageProvider
 from manga_read_flow.workflow.engine import ProcessPageResult, WorkflowLoopEngine
 from manga_read_flow.workflow.stage_executor import StageExecutor
 
@@ -23,7 +23,7 @@ class ProcessPageService:
         project_id: str,
         repositories,
         artifact_service,
-        provider: FakeProvider,
+        provider: StageProvider,
     ) -> None:
         self._project_id = project_id
         self._repositories = repositories
@@ -56,13 +56,14 @@ class ProcessPageService:
         return engine.run_task(task_id)
 
     def _ensure_fake_profile_snapshot(self):
+        provider_identity = self._provider.identity
         settings = {
             "snapshot_schema_version": "slice05.v1",
             "source_profile_id": "fakeprovider_default",
             "source_profile_version": "1",
             "provider": {
-                "name": self._provider.provider_name,
-                "model_id": self._provider.model_id,
+                "name": provider_identity.provider_name,
+                "model_id": provider_identity.model_id,
             },
             "retry_budgets": {
                 "detection": 0,

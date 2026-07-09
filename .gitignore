@@ -220,3 +220,6 @@ __marimo__/
 #codex
 .codex
 AGENTS.md
+
+# Local sample images
+local_samples/

@@ -6,7 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from uuid import uuid4
 
-from manga_read_flow.providers.fake import FakeProvider
+from manga_read_flow.domain.provider_contracts import StageProvider
 from manga_read_flow.quality import (
     QualityCheckInput,
     QualityCheckReport,
@@ -69,20 +69,21 @@ class WorkflowLoopEngine:
         repositories,
         artifact_service,
         stage_executor: StageExecutor,
-        provider: FakeProvider,
+        provider: StageProvider,
         quality_check_service: QualityCheckService | None = None,
     ) -> None:
         self._repositories = repositories
         self._artifact_service = artifact_service
         self._stage_executor = stage_executor
         self._provider = provider
+        self._provider_identity = provider.identity
         self._quality_check_service = quality_check_service or QualityCheckService()
         self._project_id = repositories.identity.get_metadata().project_id
         self._config_hash = _hash_text("fakeprovider-default-config")
         self._reuse = WorkflowReuseService(
             repositories=repositories,
             artifact_service=artifact_service,
-            provider=provider,
+            provider_identity=self._provider_identity,
             config_hash=self._config_hash,
         )
 

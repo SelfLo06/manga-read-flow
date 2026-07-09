@@ -57,6 +57,30 @@ def test_unchanged_page_rerun_reuses_provider_outputs_without_new_result_rows(
     assert after["reused_attempt_count"] > 0
 
 
+def test_workflow_uses_provider_identity_contract_for_execution_and_reuse(tmp_path):
+    project, repositories, artifact_service, page_id = _ready_imported_page(tmp_path)
+    provider = _ContractOnlyProvider(FakeProvider.happy_path())
+    process_service = ProcessPageService(
+        project_id=project.project_id,
+        repositories=repositories,
+        artifact_service=artifact_service,
+        provider=provider,
+    )
+
+    first = process_service.process_page(ProcessPageCommand(page_id=page_id))
+    second = process_service.process_page(ProcessPageCommand(page_id=page_id))
+
+    assert not isinstance(provider, FakeProvider)
+    assert not hasattr(provider, "provider_name")
+    assert not hasattr(provider, "model_id")
+    assert first.task_status == "succeeded"
+    assert second.task_status == "succeeded"
+    assert provider.call_count("ocr") == 1
+    assert provider.call_count("translation") == 1
+    assert provider.call_count("cleaning") == 1
+    assert provider.call_count("typesetting") == 1
+
+
 def test_dependency_hash_change_rerun_does_not_reuse_stale_outputs(tmp_path):
     project, repositories, artifact_service, page_id = _ready_imported_page(tmp_path)
     provider = FakeProvider.happy_path()
@@ -532,7 +556,7 @@ def _ready_imported_page(tmp_path):
     return project, repositories, artifact_service, imported.page.page_id
 
 
-def _engine(repositories, artifact_service, provider: FakeProvider) -> WorkflowLoopEngine:
+def _engine(repositories, artifact_service, provider) -> WorkflowLoopEngine:
     return WorkflowLoopEngine(
         repositories=repositories,
         artifact_service=artifact_service,
@@ -543,6 +567,18 @@ def _engine(repositories, artifact_service, provider: FakeProvider) -> WorkflowL
         ),
         provider=provider,
     )
+
+
+class _ContractOnlyProvider:
+    def __init__(self, delegate: FakeProvider) -> None:
+        self._delegate = delegate
+        self.identity = delegate.identity
+
+    def run(self, request):
+        return self._delegate.run(request)
+
+    def call_count(self, stage: str) -> int:
+        return self._delegate.call_count(stage)
 
 
 def _typeset_safety() -> ArtifactSafetyMetadata:

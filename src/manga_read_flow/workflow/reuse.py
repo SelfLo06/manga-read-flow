@@ -5,7 +5,11 @@ from hashlib import sha256
 from typing import Callable
 from uuid import uuid4
 
-from manga_read_flow.domain.provider_contracts import ProviderOutcome, ProviderResult
+from manga_read_flow.domain.provider_contracts import (
+    ProviderIdentity,
+    ProviderOutcome,
+    ProviderResult,
+)
 from manga_read_flow.persistence.repository_uow_core import (
     AcceptanceCommand,
     AttemptReservation,
@@ -31,10 +35,17 @@ class ReuseReservationConflictError(RuntimeError):
 
 
 class WorkflowReuseService:
-    def __init__(self, *, repositories, artifact_service, provider, config_hash: str) -> None:
+    def __init__(
+        self,
+        *,
+        repositories,
+        artifact_service,
+        provider_identity: ProviderIdentity,
+        config_hash: str,
+    ) -> None:
         self._repositories = repositories
         self._artifact_service = artifact_service
-        self._provider = provider
+        self._provider_identity = provider_identity
         self._config_hash = config_hash
 
     def plan_reuse(self, task, page) -> ReusePlan | None:
@@ -69,8 +80,8 @@ class WorkflowReuseService:
         if stage == "ocr":
             reusable = self._repositories.result_versions.reusable_active_ocr_for_page(
                 page.page_id,
-                provider_name=self._provider.provider_name,
-                model_id=self._provider.model_id,
+                provider_name=self._provider_identity.provider_name,
+                model_id=self._provider_identity.model_id,
                 input_hash=self.stage_input_hash("ocr", page),
                 config_hash=self._config_hash,
             )
@@ -138,8 +149,8 @@ class WorkflowReuseService:
             reusable = (
                 self._repositories.result_versions.reusable_active_translations_for_page(
                     page.page_id,
-                    provider_name=self._provider.provider_name,
-                    model_id=self._provider.model_id,
+                    provider_name=self._provider_identity.provider_name,
+                    model_id=self._provider_identity.model_id,
                     input_hash=self.stage_input_hash("translation", page),
                     config_hash=self._config_hash,
                     glossary_version_id=self._repositories.glossary.ensure_empty_version(),
@@ -177,8 +188,8 @@ class WorkflowReuseService:
             translations = (
                 self._repositories.result_versions.reusable_active_translations_for_page(
                     page.page_id,
-                    provider_name=self._provider.provider_name,
-                    model_id=self._provider.model_id,
+                    provider_name=self._provider_identity.provider_name,
+                    model_id=self._provider_identity.model_id,
                     input_hash=self.stage_input_hash("translation", page),
                     config_hash=self._config_hash,
                     glossary_version_id=self._repositories.glossary.ensure_empty_version(),

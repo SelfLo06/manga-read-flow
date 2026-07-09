@@ -12,6 +12,7 @@ import pytest
 from manga_read_flow.application.import_page import ImportPageCommand, ImportPageService
 from manga_read_flow.artifacts.service import ArtifactService
 from manga_read_flow.domain.provider_contracts import (
+    ProviderIdentity,
     ProviderOutcome,
     ProviderResult,
     ProviderTempFileRef,
@@ -66,6 +67,47 @@ def test_detection_success_returns_deterministic_candidates_without_textblock_ro
         },
     )
     assert _count_rows(project.project_db_path, "text_blocks") == 0
+
+
+def test_fakeprovider_exposes_stable_provider_identity_metadata():
+    identity = FakeProvider.happy_path().identity
+
+    assert identity.provider_name == "FakeProvider"
+    assert identity.provider_kind == "fake"
+    assert identity.model_id == "fake-model-v0"
+    assert identity.tool_name == "fake-provider"
+    assert identity.tool_version == "0.1"
+
+
+def test_stageexecutor_records_provider_identity_not_provider_result_echo(tmp_path):
+    project, repositories, artifact_service, imported = _ready_imported_page(tmp_path)
+    context = _stage_context(
+        project_id=project.project_id,
+        batch_id=imported.batch.batch_id,
+        page_id=imported.page.page_id,
+        stage="translation",
+        text_block_ids=("tb-1",),
+        attempt_temp_root=tmp_path / "attempts" / "identity-normalized",
+    )
+    _create_task(repositories, context)
+    provider = IdentityMismatchProvider()
+
+    result = StageExecutor(
+        attempt_recorder=repositories.workflow_execution,
+        evidence_writer=repositories.stage_evidence_writer,
+        artifact_service=artifact_service,
+    ).execute(context, provider)
+    tool_run = _tool_run(project.project_db_path, provider.identity.provider_name)
+    echoed_tool_run = _tool_run(project.project_db_path, "result-echo-provider")
+    attempt = _attempt(project.project_db_path, context.attempt_id)
+
+    assert result.status == "succeeded"
+    assert result.provider_result.provider_name == provider.identity.provider_name
+    assert result.provider_result.model_id == provider.identity.model_id
+    assert tool_run["model_id"] == provider.identity.model_id
+    assert echoed_tool_run is None
+    assert attempt["provider_name"] == provider.identity.provider_name
+    assert attempt["model_id"] == provider.identity.model_id
 
 
 def test_ocr_success_returns_deterministic_candidate_without_result_or_active_pointer(
@@ -617,7 +659,14 @@ def _tool_run(project_db_path, provider_name: str):
         connection.row_factory = sqlite3.Row
         return connection.execute(
             """
-            SELECT status, error_code, error_class, is_provider_refusal, sanitized_message
+            SELECT
+                status,
+                provider_name,
+                model_id,
+                error_code,
+                error_class,
+                is_provider_refusal,
+                sanitized_message
             FROM tool_run_logs
             WHERE provider_name = ?
             """,
@@ -630,7 +679,7 @@ def _attempt(project_db_path, attempt_id: str):
         connection.row_factory = sqlite3.Row
         return connection.execute(
             """
-            SELECT status, error_code, sanitized_message
+            SELECT status, provider_name, model_id, error_code, sanitized_message
             FROM workflow_attempts
             WHERE attempt_id = ?
             """,
@@ -694,6 +743,13 @@ class MissingTempOutputProvider:
     model_id = "missing-temp-model"
     tool_name = "missing-temp-provider"
     tool_version = "0.1"
+    identity = ProviderIdentity(
+        provider_name=provider_name,
+        provider_kind="test",
+        model_id=model_id,
+        tool_name=tool_name,
+        tool_version=tool_version,
+    )
 
     def run(self, request):
         return ProviderResult(
@@ -713,11 +769,36 @@ class MissingTempOutputProvider:
         )
 
 
+class IdentityMismatchProvider:
+    identity = ProviderIdentity(
+        provider_name="InjectedIdentityProvider",
+        provider_kind="test",
+        model_id="identity-model",
+        tool_name="identity-tool",
+        tool_version="9.9",
+    )
+
+    def run(self, request):
+        return ProviderResult(
+            outcome=ProviderOutcome.SUCCESS,
+            provider_name="result-echo-provider",
+            model_id="result-echo-model",
+            payload={"translations": ()},
+        )
+
+
 class CapabilityProbeProvider:
     provider_name = "CapabilityProbeProvider"
     model_id = "capability-probe-model"
     tool_name = "capability-probe-provider"
     tool_version = "0.1"
+    identity = ProviderIdentity(
+        provider_name=provider_name,
+        provider_kind="test",
+        model_id=model_id,
+        tool_name=tool_name,
+        tool_version=tool_version,
+    )
 
     def run(self, request):
         forbidden = {
@@ -747,6 +828,13 @@ class TransactionProbeProvider:
     model_id = "transaction-probe-model"
     tool_name = "transaction-probe-provider"
     tool_version = "0.1"
+    identity = ProviderIdentity(
+        provider_name=provider_name,
+        provider_kind="test",
+        model_id=model_id,
+        tool_name=tool_name,
+        tool_version=tool_version,
+    )
 
     def __init__(self, project_db_path) -> None:
         self._project_db_path = project_db_path
@@ -768,6 +856,13 @@ class ProviderThatMustNotRun:
     model_id = "must-not-run-model"
     tool_name = "must-not-run-provider"
     tool_version = "0.1"
+    identity = ProviderIdentity(
+        provider_name=provider_name,
+        provider_kind="test",
+        model_id=model_id,
+        tool_name=tool_name,
+        tool_version=tool_version,
+    )
 
     def run(self, request):
         raise AssertionError("Provider must not run after reservation conflict.")
