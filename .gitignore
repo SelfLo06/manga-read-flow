@@ -233,3 +233,5 @@ tests/unit/test_build_detection_ocr_ground_truth.py
 tests/unit/test_validate_detection_ocr_ground_truth.py
 tools/spikes/detection_ocr/
 tests/unit/test_detection_ocr_spike.py
+
+RealToolSpike总规划.md
