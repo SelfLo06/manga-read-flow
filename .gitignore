@@ -224,7 +224,10 @@ AGENTS.md
 # Local sample images
 local_samples/
 
-# Synthetic sample spike outputs
+# Real Tool Spike local tools and tests
 tools/generate_synthetic_samples.py
+tools/build_detection_ocr_ground_truth.py
+tools/validate_detection_ocr_ground_truth.py
 tests/unit/test_generate_synthetic_samples.py
-tests/fixtures/synthetic/
+tests/unit/test_build_detection_ocr_ground_truth.py
+tests/unit/test_validate_detection_ocr_ground_truth.py
