@@ -235,3 +235,5 @@ tools/spikes/detection_ocr/
 tests/unit/test_detection_ocr_spike.py
 
 RealToolSpike总规划.md
+
+.env.page-translation.local
