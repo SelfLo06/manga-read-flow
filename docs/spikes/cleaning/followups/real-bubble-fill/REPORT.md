@@ -1,501 +1,113 @@
 # Real Bubble Fill Validation Follow-up — REPORT
 
-## 1. Executive Summary
-
-* Formal run ID：
-* Git HEAD at input freeze：
-* Fixture count：12
-* Source pages：4 real pages
-* Final verdict：
-* P0 product decision：
-
-核心结论：
+## 1. Verdict
 
 ```text
-Fixture validity:
-Mask validity:
-Fill quality:
-Restricted AUTO_FILL readiness:
-```
-
----
-
-## 2. Scope
-
-本 follow-up 验证：
-
-```text
-真实对白气泡
-+ glyph-level text mask
-+ allowed_edit_mask
-+ protected_mask
-→ fixed / sampled fill
-→ 严格安全与视觉检查
-```
-
-未验证：
-
-* 自动文字 mask；
-* 自动气泡内部检测；
-* OpenCV inpaint；
-* LaMa 或生成式修复；
-* 正式 CleanerProvider；
-* Workflow、ArtifactService、SQLite；
-* Typesetting；
-* API / UI。
-
----
-
-## 3. Environment
-
-| Item           | Value |
-| -------------- | ----- |
-| OS             |       |
-| Python         |       |
-| OpenCV         |       |
-| Pillow         |       |
-| NumPy          |       |
-| Baseline tests |       |
-| Focused tests  |       |
-| Final tests    |       |
-
----
-
-## 4. Frozen Inputs
-
-| Item                        | Value |
-| --------------------------- | ----- |
-| Manifest SHA-256            |       |
-| Fixture-set SHA-256         |       |
-| Source-set SHA-256          |       |
-| Text-mask-set SHA-256       |       |
-| Allowed-mask-set SHA-256    |       |
-| Protected-mask-set SHA-256  |       |
-| Inputs changed after freeze |       |
-| Source files unchanged      |       |
-
-若正式 run 前后发生输入变化，在此记录：
-
-```text
-NONE
-```
-
----
-
-## 5. Fixture Inventory
-
-| Fixture | Source | Class     | Scenario | Expected policy | Final policy |
-| ------- | ------ | --------- | -------- | --------------- | ------------ |
-|         |        | A / B / D |          |                 |              |
-
-汇总：
-
-| Category                | Required | Actual |
-| ----------------------- | -------: | -----: |
-| A — AUTO_FILL candidate |        8 |        |
-| B — REVIEW_REQUIRED     |        2 |        |
-| D — SKIP control        |        2 |        |
-| Pages represented       |        4 |        |
-
----
-
-## 6. Fixture Selection Evidence
-
-页面候选编号图：
-
-| Source page | Selection image |
-| ----------- | --------------- |
-| black1      |                 |
-| black2      |                 |
-| gura        |                 |
-| gura_color  |                 |
-
-选择约束检查：
-
-| Check            | Result |
-| ---------------- | ------ |
-| 四张真实页均使用         |        |
-| 单页 fixture 不超过 4 |        |
-| 无重复气泡凑数量         |        |
-| A 类未集中于单页        |        |
-| B/D 风险场景明确       |        |
-
----
-
-## 7. Mask Validity
-
-每个 A/B fixture 必须具备：
-
-```text
-text_mask
-allowed_edit_mask
-protected_mask
-```
-
-### 汇总
-
-| Check                             | Pass | Fail |
-| --------------------------------- | ---: | ---: |
-| 尺寸一致                              |      |      |
-| text_mask 为 glyph-level           |      |      |
-| text_mask 位于 allowed_edit 内       |      |      |
-| text_mask 不触碰 protected           |      |      |
-| allowed_edit 不触碰 protected        |      |      |
-| 无矩形 mask                          |      |      |
-| minimum protected distance >= 1px |      |      |
-
-### 逐 Fixture
-
-| Fixture | Mask review     | Mask-to-bbox ratio | Min protected distance | Notes |
-| ------- | --------------- | -----------------: | ---------------------: | ----- |
-|         | VALID / INVALID |                    |                        |       |
-
-任何 `INVALID` fixture 不得进入正式 run。
-
----
-
-## 8. Mask Review Images
-
-每个 fixture 的四联图路径：
-
-| Fixture | Source | Text-mask overlay | Allowed/protected overlay | Combined overlay |
-| ------- | ------ | ----------------- | ------------------------- | ---------------- |
-|         |        |                   |                           |                  |
-
-至少展示四个代表性示例：
-
-1. 普通白色气泡；
-2. 真实竖排气泡；
-3. 边界敏感气泡；
-4. SKIP control。
-
----
-
-## 9. Method Matrix
-
-正式方法：
-
-| Method              | Dilation |
-| ------------------- | -------- |
-| fixed_white         | 0 / 1    |
-| border_sampled_fill | 0 / 1    |
-
-规则：
-
-* A/B 类生成候选；
-* B 类最终策略不得自动变为 `AUTO_FILL`；
-* D 类不生成正常 candidate。
-
----
-
-## 10. Automated Safety Results
-
-| Method              | Candidates | Errors | Median time | Max time |
-| ------------------- | ---------: | -----: | ----------: | -------: |
-| fixed_white         |            |        |             |          |
-| border_sampled_fill |            |        |             |          |
-
-安全门禁：
-
-| Check                        | Required | Actual | Result |
-| ---------------------------- | -------: | -----: | ------ |
-| Source mutation              |        0 |        |        |
-| Changed outside allowed-edit |        0 |        |        |
-| Changed inside protected     |        0 |        |        |
-| Size/mode mismatch           |        0 |        |        |
-| Path violations              |        0 |        |        |
-| Processing errors            |        0 |        |        |
-
-自动指标不替代视觉评级。
-
----
-
-## 11. Candidate Ratings
-
-| Method                 | ACCEPTABLE | REVIEW | UNUSABLE |
-| ---------------------- | ---------: | -----: | -------: |
-| fixed_white d0         |            |        |          |
-| fixed_white d1         |            |        |          |
-| border_sampled_fill d0 |            |        |          |
-| border_sampled_fill d1 |            |        |          |
-
-所有 A/B candidate 必须有评级。
-
----
-
-## 12. Per-Fixture Decision
-
-| Fixture | Best candidate | Rating | Final policy | Reason |
-| ------- | -------------- | ------ | ------------ | ------ |
-|         |                |        |              |        |
-
-允许的最终 policy：
-
-```text
-AUTO_FILL
-REVIEW_REQUIRED
-SKIP
-```
-
----
-
-## 13. Image Results
-
-### Per-Fixture Comparisons
-
-每个 A/B fixture 必须提供：
-
-```text
-comparisons/<fixture_id>.png
-```
-
-| Fixture | Comparison image | Best candidate | Rating |
-| ------- | ---------------- | -------------- | ------ |
-|         |                  |                |        |
-
-### Accepted Gallery
-
-```text
-accepted-gallery/index.png
-```
-
-应包含：
-
-* source crop；
-* best cleaned result；
-* 200% detail；
-* method 与 dilation；
-* fixture ID。
-
-### Review Gallery
-
-```text
-review-gallery/index.png
-```
-
-必须直接标明：
-
-* 色差；
-* 抗锯齿残留；
-* 边界距离不足；
-* 不规则气泡；
-* 其他 review 原因。
-
-### Rejected Gallery
-
-```text
-rejected-gallery/index.png
-```
-
-必须包含：
-
-* 明显矩形填充；
-* 边框或尾巴损伤；
-* 文字残留；
-* 过度填充；
-* D 类 SKIP control；
-* 其他不可接受结果。
-
----
-
-## 14. Representative Successes
-
-至少给出两项 200% 局部放大成功例。
-
-### Success 1
-
-* Fixture：
-* Method：
-* Dilation：
-* Image：
-* Why acceptable：
-
-### Success 2
-
-* Fixture：
-* Method：
-* Dilation：
-* Image：
-* Why acceptable：
-
----
-
-## 15. Representative Failures
-
-至少给出两项 200% 局部放大失败例。
-
-### Failure 1
-
-* Fixture：
-* Method：
-* Failure tags：
-* Image：
-* Why unusable：
-
-### Failure 2
-
-* Fixture：
-* Method：
-* Failure tags：
-* Image：
-* Why unusable：
-
----
-
-## 16. Failure Taxonomy
-
-| Failure                  | Count | Representative fixtures |
-| ------------------------ | ----: | ----------------------- |
-| text_residue             |       |                         |
-| rectangular_fill         |       |                         |
-| fill_edge_visible        |       |                         |
-| color_mismatch           |       |                         |
-| anti_aliasing_residue    |       |                         |
-| bubble_border_damage     |       |                         |
-| bubble_tail_damage       |       |                         |
-| line_art_damage          |       |                         |
-| overfill                 |       |                         |
-| changed_inside_protected |       |                         |
-| changed_outside_allowed  |       |                         |
-| invalid_mask             |       |                         |
-| processing_error         |       |                         |
-
-Candidate 级计数不得解释为真实漫画发生率。
-
----
-
-## 17. Independent Review
-
-* Reviewer：
-* Review mode：read-only
-* Reviewed evidence：
-
-  * source crop；
-  * 三层 mask overlay；
-  * raw candidate；
-  * difference overlay；
-  * 200% zoom。
-
-Reviewer 结论：
-
-```text
-Mask validity:
-Rating consistency:
-Severe damage missed:
-Verdict support:
-```
-
-评级冲突：
-
-| Fixture | Original rating | Reviewer rating | Final rating | Reason |
-| ------- | --------------- | --------------- | ------------ | ------ |
-|         |                 |                 |              |        |
-
-发生冲突时采用更严格评级。
-
----
-
-## 18. Harness Gates
-
-| Gate                      | Requirement | Actual | Result |
-| ------------------------- | ----------- | ------ | ------ |
-| A-class acceptable        | >= 7/8      |        |        |
-| A-class protected damage  | 0/8         |        |        |
-| A-class rectangular fill  | 0/8         |        |        |
-| B-class auto-accepted     | 0/2         |        |        |
-| D-class normal candidates | 0/2         |        |        |
-| Changed inside protected  | 0           |        |        |
-| Changed outside allowed   | 0           |        |        |
-| Severe damage accepted    | 0           |        |        |
-| Invalid fixture admitted  | 0           |        |        |
-| Source mutation           | 0           |        |        |
-
----
-
-## 19. Final Verdict
-
-选择一个：
-
-```text
-GO
-CONDITIONAL_GO
 FURTHER_SPIKE
-NO_GO
 ```
 
-理由：
+4 张真实页上的受限 `AUTO_FILL` 未恢复。三层 mask 与像素级 safety gate 能阻止输出越过“标注的” allowed/protected 区域，但不能证明标注本身只覆盖真实气泡内部；且 200% 审查发现可辨认文字残留。独立 reviewer 进一步发现一个 allowed mask 延伸到手部/背景，因此本轮没有可自动接受的 A 类结果。
 
----
+P0 决策：`restricted AUTO_FILL remains disabled`；A/B 一律 `REVIEW_REQUIRED`，D 保持 `SKIP`。
 
-## 20. P0 Product Decision
+## 2. Scope / Environment
 
-### 当 Verdict 为 CONDITIONAL_GO
+* 只使用 `black1.webp`、`black2.webp`、`gura.webp`、`gura_color.webp`；未使用 synthetic、inpaint、LaMa、VLM、网络、SQLite 或正式 artifact。
+* Python 3.13.12，OpenCV 5.0.0，Pillow 12.2.0，NumPy 2.4.6；CPU-only。
+* 验证：`pytest -q tests/unit/test_real_bubble_fill_followup.py` 为 11 passed；完整 `pytest -q` 为 147 passed。
+* 初始分支/HEAD：`main` / `f39c0c24ca8198a99281aad424c87f87958ca599`；最终 freeze HEAD：`3088a9367cec5b80b073e46d711577b160e015fa`。
 
-仅允许：
+## 3. Fixture 与 Mask
 
-```text
-低方差白色或浅色气泡内部
-+ 已通过审核的 glyph-level mask
-+ 明确 allowed-edit 区域
-+ protected-region safety gate
-→ restricted AUTO_FILL
-```
+| Fixture | Page | Class | Final policy | Final rating |
+| --- | --- | --- | --- | --- |
+| black2-top-right | black2 | A | REVIEW_REQUIRED | REVIEW |
+| black2-middle-right | black2 | A | REVIEW_REQUIRED | UNUSABLE |
+| black2-lower-left | black2 | A | REVIEW_REQUIRED | UNUSABLE |
+| black1-bottom-right | black1 | A | REVIEW_REQUIRED | UNUSABLE |
+| gura-top-dialogue | gura | A | REVIEW_REQUIRED | REVIEW |
+| gura-color-small-center | gura_color | A | REVIEW_REQUIRED | UNUSABLE |
+| gura-color-small-right | gura_color | A | REVIEW_REQUIRED | UNUSABLE |
+| gura-color-lower-left | gura_color | A | REVIEW_REQUIRED | UNUSABLE |
+| black1-top-right-sensitive | black1 | B | REVIEW_REQUIRED | REVIEW |
+| gura-middle-right-sensitive | gura | B | REVIEW_REQUIRED | REVIEW |
+| black1-music-note | black1 | D | SKIP | SKIP |
+| gura-rec-overlay | gura | D | SKIP | SKIP |
 
-继续禁止：
+分布为 8 A / 2 B / 2 D，四页均使用，单页不超过 4 个 fixture。每个 A/B 均有 glyph-level `text_mask`、`allowed_edit_mask`、`protected_mask`；D 仅有 `protected_mask` 与 skip reason。
 
-```text
-边界敏感气泡自动接受
-纹理和渐变区域自动修复
-人物或线稿重叠区域清字
-艺术字和拟声词清字
-OpenCV inpaint 默认启用
-```
+最终 freeze：`FROZEN`，时间 `2026-07-13T08:12:40.312877+00:00`。
 
-### 当 Verdict 为 FURTHER_SPIKE / NO_GO
+* fixture SHA-256：`531091919917c4b4a65ef92d4690c1da7fe92f1a0b2c206e8fa188cbcc080980`
+* source set：`fb10688ca498ee88e56e4548cd8edc7fd922f90542f15dd5359b8c6d1641f4cc`
+* text / allowed / protected：`381f91c139249b9b2123161a16a46dd612ed6944d7d4023a86406c8e2b5df0f2` / `faf6a92a3b29134d6f0ed32d9ceeb99f505761b891835c087042a00c2140ff97` / `8921ca73b4d4270024352ef2fb4b3768aec137dbb1129e66116409e33f2b297a`
 
-```text
-Restricted AUTO_FILL remains disabled.
-```
+页面选区图：
 
----
+* `local_samples/cleaning/real_bubble_fill/previews/selection-{black1,black2,gura,gura_color}.png`
 
-## 21. Formal Integration Conditions
+12 张 mask-review（均在 run 前生成；reviewer 事后否定了 `gura-color-small-right` 的语义有效性）：
 
-进入 CleanerProvider 设计前必须满足：
+* `.../mask-review/{black2-top-right,black2-middle-right,black2-lower-left,black1-bottom-right,black1-top-right-sensitive,black1-music-note,gura-top-dialogue,gura-middle-right-sensitive,gura-rec-overlay,gura-color-small-center,gura-color-small-right,gura-color-lower-left}.png`
 
-* `CleanerInput` 明确 source、text mask、allowed-edit 和 protected references；
-* Provider 只返回临时输出；
-* Provider 不访问数据库或决定接受策略；
-* ArtifactService 负责正式 artifact 生命周期；
-* QualityCheckService 检查 protected-region damage、residue 和 overfill；
-* WorkflowLoopEngine 决定 warning、review、skip 或 block；
-* 所有 mask/source/method 参数进入 provenance；
-* 原图永不覆盖；
-* 自动接受仅限本实验支持的 A 类 profile。
+## 4. Run 与安全结果
 
----
+正式分析 run：`20260713T081323Z-c7993e`，目录：`local_samples/spike_outputs/cleaning-real-bubble-fill/20260713T081323Z-c7993e/`。
 
-## 22. Limitations
+此前 `20260713T080533Z-416d32`、`20260713T081010Z-b1f6ed` 发现 glyph-mask undercoverage 后均保留，metadata 标记 `valid_for_verdict=false`，旧 mask 也归档在 `masks-history/`。
 
-至少记录：
+| Method | Candidates | Median | Max |
+| --- | ---: | ---: | ---: |
+| fixed_white | 20 | 2.324 ms | 2.493 ms |
+| border_sampled_fill | 20 | 5.151 ms | 5.624 ms |
 
-* fixture 数量有限；
-* mask 为人工制作；
-* 未验证自动 mask；
-* 未验证所有漫画风格；
-* 未验证 Typesetting 后效果；
-* 视觉审查仍带主观性；
-* 真实 P0 使用中的 A/B 分类仍需实现。
+40 个 A/B candidate 记录并通过 source hash、输出尺寸、路径、`changed_outside_allowed_edit=0`、`changed_inside_protected=0` 检查；2 个 D 没有 normal candidate。注意：该像素级 PASS 只对人工 mask 的边界有效，不能替代气泡语义边界检查。
 
----
+## 5. Ratings、失败与审查
 
-## 23. Recommended Next Step
+每个方法/膨胀组合：0 ACCEPTABLE、4 REVIEW、6 UNUSABLE。A 类最终为 `0/8 ACCEPTABLE`。
 
-只选择一个：
+failure taxonomy：`text_residue=24`、`anti_aliasing_residue=8`、`near_boundary=8`、`review_required=8`、`bubble_border_damage=4`。
 
-```text
-进入 Typesetting Real Tool Spike
-进入 Mask Generation Follow-up
-补充 Real Bubble Fill 样本
-停止自动 Cleaning
-```
+只读 reviewer 复查 source、三层 overlay、raw candidate、difference 与 200% zoom 后要求采用更严格评级：
+
+* `black2-top-right`、`gura-top-dialogue` 从可接受降为 REVIEW；前者有浅色字形残留，后者有浅色残留及细小轮廓侵入。
+* `gura-color-small-right` 从可接受降为 UNUSABLE；allowed/text mask 涵盖气泡左侧手部/背景，输出产生白块。该发现说明当前 formal run 不能作为任何 AUTO_FILL 证据。
+* 其余五个 A 类 UNUSABLE 与 200% 图中的可辨认文本残留一致；B 无 AUTO_FILL，D 无候选。
+
+## 6. 图像交付物
+
+所有 A/B comparison（均包含 source、三层 overlay、四种 candidate、difference、200% zoom、rating）：
+
+* `.../comparisons/black2-top-right.png`
+* `.../comparisons/black2-middle-right.png`
+* `.../comparisons/black2-lower-left.png`
+* `.../comparisons/black1-bottom-right.png`
+* `.../comparisons/black1-top-right-sensitive.png`
+* `.../comparisons/gura-top-dialogue.png`
+* `.../comparisons/gura-middle-right-sensitive.png`
+* `.../comparisons/gura-color-small-center.png`
+* `.../comparisons/gura-color-small-right.png`
+* `.../comparisons/gura-color-lower-left.png`
+
+图集：
+
+* `.../accepted-gallery/index.png`（最终无 accepted entry）
+* `.../review-gallery/index.png`
+* `.../rejected-gallery/index.png`
+
+代表性 200% 成功候选（仅作为 review 对照，不是 P0 acceptance）：`comparisons/black2-top-right.png`、`comparisons/gura-top-dialogue.png`。代表性失败：`comparisons/black2-middle-right.png`、`comparisons/gura-color-lower-left.png`。
+
+## 7. Harness 与下一步
+
+| Gate | Actual | Result |
+| --- | --- | --- |
+| A ACCEPTABLE >=7/8 | 0/8 | FAIL |
+| B 自动接受 | 0/2 | PASS |
+| D normal candidates | 0/2 | PASS |
+| source mutation | 0 | PASS |
+| changed outside annotated allowed | 0 | PASS（但不足以证明语义安全） |
+| changed inside annotated protected | 0 | PASS（但不足以证明语义安全） |
+| severe damage accepted | 0 | PASS |
+
+风险/限制：样本很少、mask 人工制作、当前 allowed mask 仍可能错误地覆盖非气泡结构；未验证自动 mask、更多漫画风格、Typesetting 后效果。建议下一步只做 `Mask Generation Follow-up`，先证明 semantic bubble interior / protected region 的标注或检测可靠，再重开 fill 验证。
