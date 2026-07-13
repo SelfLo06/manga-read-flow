@@ -7,11 +7,12 @@
 * Provider：OpenAI-compatible chat completions endpoint
 * Model：`deepseek-v4-pro`
 * Prompt version：`system-v1`
-* Final verdict：`NO_GO`
-* 是否允许进入正式 TranslationProvider 设计：`NO`
-* 主要限制：D 组 Full Text Context 出现 2 次 `empty_response`，导致 final schema-valid rate = 75%、block coverage = 65.38%，未达到 HARNESS 的 100% final schema-valid 和 >=98% coverage 门槛。
+* Original run verdict：`NO_GO`
+* Page Translation Core Verdict：`CONDITIONAL_GO`
+* P0 Previous Context Policy：`DISABLE_FOR_MVP`
+* 主要限制：父 run 的 D 组 Full Text Context 出现 2 次 `empty_response`，导致 end-to-end valid response rate 和 block coverage 不达标。后续 Full Text Context Stability Follow-up 未复现这两个 payload 的空响应；其唯一新空响应有明确的 token-limit 证据。因此父 run 不能证明 previous context 导致失败，也不能据此否定 Page Translation 核心能力。
 
-本轮结论是：Page-level 和 glossary 在可返回响应的请求中表现可用，但 Full Text Context 当前不稳定，不能进入正式 Provider / ContextBuilder 设计。
+本轮结论是：Page-level 和 glossary 在可返回响应的请求中表现可用。Full Text Context 的父 run 证据不足以支持默认启用；follow-up 的 `FURTHER_SPIKE` 仅表示 previous-context 证据不足，不表示 Page Translation 核心能力不可用。P0 采用 Page-level + glossary，保留 previous-context 的数据与追溯接口但默认不发送非空历史上下文。
 
 ---
 
@@ -111,27 +112,32 @@ YES
 
 ---
 
-## 6. Structural Results
+## 6. Runtime and Structural Results
 
-| 指标                           | A | B | C | D |
-| ---------------------------- | -: | -: | -: | -: |
-| Request count                | 26 | 8 | 8 | 8 |
-| API success                  | 26 | 8 | 8 | 6 |
-| First-pass JSON parse rate   | 100% | 100% | 100% | 100% |
-| First-pass schema-valid rate | 96.15% | 87.50% | 100% | 75.00% |
-| Final schema-valid rate      | 100% | 100% | 100% | 75.00% |
-| Block coverage               | 100% | 100% | 100% | 65.38% |
-| Missing blocks               | 0 | 0 | 0 | 0 |
-| Duplicate blocks             | 0 | 0 | 0 | 0 |
-| Unknown blocks               | 0 | 0 | 0 | 0 |
-| Wrong page ID                | 0 | 0 | 0 | 0 |
-| Invalid uncertainty flags    | 0 | 0 | 0 | 0 |
-| Empty translations           | 0 | 0 | 0 | 0 |
+以下四个指标使用不同分母，不能合并为单一 `schema-valid` 指标：
+
+| 指标 | 定义 |
+| --- | --- |
+| API response rate | 非空 API / Provider 响应数 ÷ 请求数 |
+| Schema-valid rate among non-empty responses | 最终 schema-valid 响应数 ÷ 非空响应数 |
+| End-to-end valid response rate | 最终 schema-valid 响应数 ÷ 请求数 |
+| Block coverage among all expected blocks | 已匹配 TextBlock 数 ÷ 全部预期 TextBlock 数 |
+
+| 指标 | A | B | C | D |
+| --- | -: | -: | -: | -: |
+| Request count | 26 | 8 | 8 | 8 |
+| API response rate | 26/26 (100%) | 8/8 (100%) | 8/8 (100%) | 6/8 (75%) |
+| First-pass schema-valid among non-empty responses | 25/26 (96.15%) | 7/8 (87.50%) | 8/8 (100%) | 6/6 (100%) |
+| Final schema-valid among non-empty responses | 26/26 (100%) | 8/8 (100%) | 8/8 (100%) | 6/6 (100%) |
+| End-to-end valid response rate | 26/26 (100%) | 8/8 (100%) | 8/8 (100%) | 6/8 (75%) |
+| Block coverage among all expected blocks | 26/26 (100%) | 26/26 (100%) | 26/26 (100%) | 17/26 (65.38%) |
+| Missing / duplicate / unknown blocks in non-empty responses | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 |
+| Wrong page ID / invalid uncertainty flags / empty translations | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 |
 
 主要结构失败：
 
-* `D-context-dependent-01`：`empty_response`，未进入 repair。
-* `D-long-page-01`：`empty_response`，未进入 repair。
+* `D-context-dependent-01`：`empty_response`，`NO_OUTPUT / NOT_EVALUABLE`，未进入 repair。
+* `D-long-page-01`：`empty_response`，`NO_OUTPUT / NOT_EVALUABLE`，未进入 repair。
 * `A-long-page-05`：first pass Markdown-wrapped JSON，一次 repair 成功。
 * `B-terminology-01`：first pass Markdown-wrapped JSON，一次 repair 成功。
 
@@ -167,17 +173,19 @@ Repair 是否误改了原本合法译文：
 
 以下评级为本地启发式预评级加独立 Codex reviewer 抽样判断，不是真人人工评审。
 
-| Group | ACCEPTABLE | REVIEW | UNUSABLE |
-| ----- | ---------: | -----: | -------: |
-| A     | 26 | 0 | 0 |
-| B     | 26 | 0 | 0 |
-| C     | 26 | 0 | 0 |
-| D     | 17 | 0 | 9 |
+| Group | ACCEPTABLE | REVIEW | UNUSABLE | NO_OUTPUT / NOT_EVALUABLE |
+| ----- | ---------: | -----: | -------: | ------------------------: |
+| A     | 26 | 0 | 0 | 0 |
+| B     | 26 | 0 | 0 | 0 |
+| C     | 26 | 0 | 0 | 0 |
+| D     | 17 | 0 | 0 | 9 blocks / 2 requests |
+
+补充：D 组 9 个 block 属于 `NO_OUTPUT / NOT_EVALUABLE`，不是 `UNUSABLE` 翻译质量失败。父 run 初版统计把 runtime failure 混入质量失败，follow-up 已对此作出修正。
 
 主要质量问题：
 
 * meaning error：未系统性发现，但 B 组 `先輩` 出现“学姐/学长”式无依据性别化。
-* translation omission：D 组两个 empty response 导致 9 个 block 无有效译文。
+* translation omission：D 组两个 empty response 导致 9 个 block 无模型输出；这是 runtime/provider 层 `NO_OUTPUT`，不应计为译文质量 `UNUSABLE`。
 * hallucination：未见前页内容直接复制到当前页。
 * terminology inconsistency：B 组未用 glossary，`蒼星祭`、`星見部`、`先輩` 不一致；C/D 改善明显。
 * tone / honorific error：`先輩` 建议统一为“前辈”，避免无视觉依据性别化。
@@ -191,8 +199,8 @@ Repair 是否误改了原本合法译文：
 | terminology / tm-b003 | B | 星見部の出し物も決めなきゃ。 | 星见部的展示内容也得定下来。 | ACCEPTABLE | 未按 glossary 使用“观星部” |
 | previous-page / pp-b002 | B | わかった。先輩には内緒だからね。 | 知道了。要对学长保密哦。 | ACCEPTABLE | 无依据性别化 |
 | context-dependent / cd-b002 | B | うん、でも今日こそ渡す。 | 嗯，不过我今天一定要给他。 | ACCEPTABLE | 指代对象未标不确定 |
-| D / context-dependent | D | page | no effective response | UNUSABLE | empty_response |
-| D / long-page | D | page | no effective response | UNUSABLE | empty_response |
+| D / context-dependent | D | page | no model output | NO_OUTPUT / NOT_EVALUABLE | empty_response |
+| D / long-page | D | page | no model output | NO_OUTPUT / NOT_EVALUABLE | empty_response |
 
 ---
 
@@ -206,7 +214,7 @@ Repair 是否误改了原本合法译文：
 | REVIEW                     | 0 | 0 | 0 |
 | UNUSABLE                   | 0 | 0 | 0 |
 | Meaning errors             | 未系统量化 | 未系统量化 | - |
-| Unsupported disambiguation | 0 | 0 | 0 |
+| Unsupported disambiguation | 0 | 3 个明确样本 | +3 |
 | Median latency             | 3949ms | 7101ms | +3152ms |
 | Input tokens               | 46618 | 16263 | -30355 |
 
@@ -253,23 +261,20 @@ USE_AS_HINT
 
 ## 11. Previous Context Effect
 
-比较 Group C 与 Group D。
+比较 Group C 与 Group D。只有 `previous-page` fixture 真正包含非空 previous context；`context-dependent` 和 `long-page` 的 C/D request hash 相同，因此这两个页面的 D 组失败不能归因于 previous context。
 
-| 指标                   | Without previous context | With previous context |
-| -------------------- | -----------------------: | --------------------: |
-| Context improvements | 0 | 3 |
-| No effect            | - | 0 |
-| Regressions          | 0 | 9 unusable due empty response |
-| Context pollution    | 0 | 0 |
-| Token increase       | 14969 | 11242 |
-| Latency increase     | median 7343ms | median 11492ms |
+| 指标 | 父 run 可支持的结论 |
+| ---- | ------------------ |
+| 真正带非空 previous context 的 fixture | `previous-page` 1 个，共 3 个 block |
+| Context improvements | 未证实明确、可归因的改善 |
+| No meaningful effect | `previous-page` 的 3 个已评估 block |
+| Runtime no output | 2 个请求、9 个 block；不归因于 previous context |
+| Context pollution | 0 个已观察样本 |
+| Token / latency 对比 | 父 run 受两次无输出和仅一个有效上下文 fixture 限制，不用于推断 context 效应 |
 
-改善的内容：
+父 run 的唯一有效 C/D 上下文比较是 `previous-page`。其 3 个 block 在 C/D 中均可用，只有“按约定 / 照约定”的同义措辞差异；没有足够证据将其认定为 previous context 带来的改善。称谓“前辈”在 C/D 中都可用，不能作为历史上下文的独立收益。
 
-* 称谓一致：`先輩` 更稳定为“前辈”。
-* 专有名词一致：未见明显新增收益。
-* 连续对白：`previous-page` 可用样本中语义自然。
-* 指代处理：证据不足，因为 D 组 `context-dependent` 未返回。
+指代处理仍证据不足：`context-dependent` 的 C/D request hash 相同，且 D 请求未返回，不能据此判断 previous context 的收益或回归。
 
 发现的污染：
 
@@ -281,7 +286,7 @@ USE_AS_HINT
 FURTHER_SPIKE_REQUIRED
 ```
 
-当前不能推荐正式窗口，因为 D 组稳定性失败。
+当前不能推荐正式窗口。Follow-up 显示父 run 两个空响应 payload 在 5 次重复中均未复现，且唯一新空响应发生在 N 组并有明确 `TOKEN_LIMIT_ASSOCIATED` 证据；P 组 18/18 成功，未发现 previous context 降低稳定性。父 run 因而不能归因于 previous context；但 previous context 的可重复质量收益仍不足。
 
 ---
 
@@ -291,7 +296,7 @@ FURTHER_SPIKE_REQUIRED
 | -------------------------- | -: |
 | Flagged blocks             | 约 5 |
 | Appropriate uncertainty    | 5 |
-| Unsupported disambiguation | 0 |
+| Unsupported disambiguation | 3 个明确样本 |
 | Missed material ambiguity  | 23 |
 | Over-flagging              | 0 |
 | Invalid flags              | 0 |
@@ -300,7 +305,7 @@ FURTHER_SPIKE_REQUIRED
 
 结论：
 
-* 是否能避免无依据补充姓名、性别或人物关系：不稳定，B 组有“学长/学姐”式无依据性别化。
+* 是否能避免无依据补充姓名、性别或人物关系：不稳定。明确样本包括 `先輩 → 学姐`、`先輩 → 学长`，以及 `渡す → 给他`；在缺少足够原文或可信上下文依据时，均归入 `unsupported_disambiguation`。
 * 是否漏掉实质性歧义：是，`context-dependent` 与 `ocr-noise` 漏标明显。
 * 是否存在系统性过度标记：未发现。
 * 是否适合作为 QualityCheckService 输入：暂不适合直接使用，需要后续 quality gate 解释层和更可靠 prompt/评估。
@@ -345,7 +350,7 @@ FURTHER_SPIKE_REQUIRED
 | empty_response             | 2 | no | provider/runtime failure handling, no repair |
 | translation_omission       | 9 effective missing blocks from D empty responses | no | retry policy belongs outside provider adapter |
 | terminology_inconsistent   | B terminology sample | no | glossary hint helps |
-| unsupported_disambiguation | 0 counted, but gendered “学长/学姐” needs review | no | QualityCheckService risk |
+| unsupported_disambiguation | 3 个明确样本：`先輩 → 学姐`、`先輩 → 学长`、`渡す → 给他` | no | QualityCheckService 风险；不把其他 reviewer 边界判断机械计为错误 |
 | missed_material_ambiguity  | 23 heuristic count | no | prompt/quality gate improvement |
 | context_pollution          | 0 | no | continue monitoring |
 
@@ -372,29 +377,55 @@ Reviewer 判断：
 
 ---
 
-## 16. Final Verdict
+## 16. Final Decisions
+
+### Original Run Verdict
 
 ```text
 NO_GO
 ```
 
-理由：
+这是父 run 的历史 verdict：D 组端到端有效率为 6/8、全量 block coverage 为 17/26，未达到当时 Full Text Context 的门槛。原始 run 数据和失败证据保持不变。
 
-* HARNESS 的 GO 要求 final schema-valid rate = 100%、block coverage >= 98%。
-* 本轮 D 组 final schema-valid rate = 75%、block coverage = 65.38%。
-* D 组发生 2 次 empty response，造成 9 个 TextBlock 无有效译文。
-* Previous context 的质量收益无法抵消稳定性失败。
-
-是否进入正式 TranslationProvider / ContextBuilder 设计：
+### Page Translation Core Verdict
 
 ```text
-NO
+CONDITIONAL_GO
 ```
 
-建议下一步：
+理由：
 
-* 先做 Further Spike，专门验证 Full Text Context 的请求大小、timeout、max token、provider empty response 行为和是否需要更小 previous-context 窗口。
-* 同时加强 uncertainty prompt 与评价标准，尤其是指代、省略、OCR 噪声漏标。
+* Page-level structured translation 可用，TextBlock mapping 可严格校验。
+* glossary 有实际收益。
+* 一次 structural repair 可恢复 markdown-wrapped JSON。
+* 成功响应可达到 100% final schema-valid 和 mapping coverage。
+* follow-up 中 previous context 未显示稳定性伤害。
+* uncertainty flags 仍不可靠，且 output token limit / incomplete output 必须显式处理。
+
+### P0 Previous Context Policy
+
+```text
+DISABLE_FOR_MVP
+```
+
+P0 默认输入固定为：
+
+```text
+versioned System Prompt
++ current Page TextBlocks
++ reading_order / grouping
++ relevant Project glossary
++ previous_context = []
+```
+
+保留 `previous_context` 字段、hash 和 provenance seam，但不默认发送非空历史上下文；这不是永久删除该能力。
+
+### Provider / Workflow Follow-up
+
+* output token limit 必须可配置；`finish_reason = length` 归为 incomplete output。
+* Provider Adapter 只返回结构化结果和错误证据，不决定 retry。
+* WorkflowLoopEngine 根据 `ProcessingProfileSnapshot` 决定是否提高 token budget 后重试，且 retry 必须有界。
+* uncertainty flags 只能作为弱质量证据，不能单独决定 block。
 
 ---
 
