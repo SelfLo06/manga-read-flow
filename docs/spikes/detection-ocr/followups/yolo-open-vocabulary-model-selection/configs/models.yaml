@@ -1,0 +1,27 @@
+models:
+  - family: YOLOE-26
+    variants: [N, S, M]
+    task_type: segmentation
+    framework: ultralytics
+    weights:
+      N: models/yoloe-26/yoloe-26n-seg.pt
+      S: models/yoloe-26/yoloe-26s-seg.pt
+      M: models/yoloe-26/yoloe-26m-seg.pt
+    default_role: open-vocabulary OCR-region and cleaning-mask candidate
+  - family: YOLOE-11
+    variants: [S, M]
+    task_type: segmentation
+    framework: ultralytics
+    weights:
+      S: models/yoloe-11/yoloe-11s-seg.pt
+      M: models/yoloe-11/yoloe-11m-seg.pt
+    default_role: stable segmentation comparison baseline
+  - family: YOLO-World V2.1
+    variants: [S, M]
+    task_type: detection
+    framework: mmyolo
+    weights:
+      S: models/yolo-world-v2.1/s_stage1-d1c1d7d8.pth
+      M: models/yolo-world-v2.1/m_stage1-7e1e5299.pth
+    default_role: open-vocabulary recall baseline
+    supports_mask: false
