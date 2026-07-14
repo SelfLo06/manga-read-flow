@@ -241,7 +241,7 @@ RealToolSpike总规划.md
 data/
 
 # Local-only dataset-audit derivative cache and debug visualizations
-artifacts/dataset-audit/
+artifacts/
 .tmp/dataset-audit/
 
 docs/spikes/cleaning-dataset-audit
