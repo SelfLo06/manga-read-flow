@@ -31,7 +31,7 @@ Out of scope：完整提示词校准、40–60 页矩阵、OCR crop 指标、清
 Preparation：完成
 结构化失败 smoke：完成
 YOLOE GPU smoke inference：完成（YOLOE-26N 与 YOLOE-11S 均为 empty_result）
-YOLO-World GPU smoke inference：尚未完成
+YOLO-World GPU smoke inference：BLOCKED（官方 checkpoint 的 exact config/runtime source 未公开匹配）
 Prompt calibration：尚未解锁
 ```
 
@@ -64,6 +64,7 @@ Prompt calibration：尚未解锁
 ## 风险与开放问题
 
 - YOLO-World V2.1 checkpoint 还需要匹配的 MMYOLO 配置；本仓库未捆绑该配置。
+- V2.1-S stage1 checkpoint 的 `meta.cfg` 依赖官方公开仓库及其历史中不存在的 `projects.YoloW.yolow` runtime；顶层相近 S config 的 detector、backbone、neck、head 和 fixed-padding path 均不同，不能作为精确配置强行加载。详见 `RUNTIME-ENABLEMENT.md`。
 - 当前环境的可选推理包可能缺失或二进制不兼容；这应作为结构化证据，而非由脚本修复。
 - 两个 YOLOE 最小模型在固定原版页面上均得到 `empty_result`；这证明 GPU 加载、推理、解析和空结果保存链路可用，但不证明当前 `text` 提示词具有漫画文字召回能力。计时仅作诊断证据，不作性能结论。
 - 三个版本目录位于每部作品下且存在名称差异；manifest 只据父目录中的无字/中文标记归为 `original`、`translated`、`cleaned`，不推断任何复杂语义 `tags`。

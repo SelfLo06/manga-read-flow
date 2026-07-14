@@ -46,7 +46,7 @@ Preparation Gate：PASS
 YOLOE Runtime Enablement：PASS
   YOLOE-26N@640：empty_result
   YOLOE-11S@640：empty_result
-YOLO-World Runtime Enablement：待执行
+YOLO-World Runtime Enablement：BLOCKED（缺少官方 exact config/runtime source）
 Prompt Calibration：继续锁定
 ```
 
