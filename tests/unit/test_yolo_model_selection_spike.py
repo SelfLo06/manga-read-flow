@@ -6,6 +6,7 @@ import sys
 
 from PIL import Image
 import pytest
+import yaml
 
 SPIKE_DIR = Path(__file__).resolve().parents[2] / "tools" / "spikes" / "yolo_model_selection"
 if str(SPIKE_DIR) not in sys.path:
@@ -17,7 +18,7 @@ from normalize import denormalize_bbox_xyxy, normalize_bbox_xyxy
 from output_layout import create_run_layout
 from runners.base import classify_exception
 from schemas import error_result
-from smoke_test import image_dimensions, raw_record
+from smoke_test import image_dimensions, raw_record, select_sample
 
 
 def make_image(path: Path) -> None:
@@ -64,7 +65,50 @@ def test_registry_separates_detection_and_segmentation(tmp_path: Path) -> None:
     world = next(model for model in models if model["family"] == "YOLO-World V2.1")
     assert world["task_type"] == "detection"
     assert world["supports_mask"] is False
+    assert world["config_required"] is True
+    assert world["config_path"] is None
     assert all(model["supports_mask"] for model in models if model["family"].startswith("YOLOE"))
+
+
+def test_smoke_sample_is_fixed_to_expected_original_and_hash() -> None:
+    expected = {
+        "sample_id": "sample_original",
+        "version": "original",
+        "sha256": "abc",
+        "relative_path": "work/original/page.png",
+        "enabled": True,
+    }
+    manifest = {
+        "samples": [
+            {"sample_id": "sample_cleaned", "version": "cleaned", "sha256": "def", "enabled": True},
+            expected,
+        ]
+    }
+    config = {"sample_id": "sample_original", "required_version": "original", "sha256": "abc"}
+    assert select_sample(manifest, config) == expected
+
+
+def test_smoke_sample_rejects_manifest_hash_drift() -> None:
+    manifest = {"samples": [{"sample_id": "sample_original", "version": "original", "sha256": "changed", "enabled": True}]}
+    config = {"sample_id": "sample_original", "required_version": "original", "sha256": "abc"}
+    with pytest.raises(ValueError, match="sha256"):
+        select_sample(manifest, config)
+
+
+def test_committed_configs_make_resolution_paths_and_capabilities_explicit() -> None:
+    config_root = Path(__file__).resolve().parents[2] / "docs/spikes/detection-ocr/followups/yolo-open-vocabulary-model-selection/configs"
+    inference = yaml.safe_load((config_root / "inference.yaml").read_text(encoding="utf-8"))
+    models = yaml.safe_load((config_root / "models.yaml").read_text(encoding="utf-8"))
+    assert inference["imgsz"] == 640
+    assert inference["smoke_sample"]["required_version"] == "original"
+    assert inference["smoke_sample"]["sha256"]
+    assert models["weights_root"] == "data/local"
+    for model in models["models"][:2]:
+        assert model["supports_bbox"] is True
+        assert model["supports_mask"] is True
+    world = models["models"][2]
+    assert world["config_required"] is True
+    assert world["config_path"] is None
 
 
 def test_existing_run_is_never_overwritten(tmp_path: Path) -> None:

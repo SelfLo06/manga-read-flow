@@ -14,4 +14,3 @@ def classify_exception(error: BaseException) -> str:
     if "out of memory" in text or "cuda oom" in text:
         return "oom"
     return "runtime_error"
-

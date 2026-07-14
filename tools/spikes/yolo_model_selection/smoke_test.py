@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from PIL import Image
+import yaml
 
 try:
     from .environment_report import build_report
@@ -36,15 +37,8 @@ except ImportError:
     from schemas import error_result
 
 
-REQUEST = {
-    "prompt_set": "text",
-    "requested_imgsz": 640,
-    "confidence": 0.05,
-    "iou": 0.7,
-    "device": 0,
-    "half": True,
-}
-INFERENCE = {"imgsz": 640, "confidence": 0.05, "iou": 0.7, "max_det": 300, "device": 0, "half": True}
+REPO_ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_INFERENCE_CONFIG = REPO_ROOT / "docs/spikes/detection-ocr/followups/yolo-open-vocabulary-model-selection/configs/inference.yaml"
 SMOKE_MODELS = (("YOLOE-26", "N"), ("YOLOE-11", "S"), ("YOLO-World V2.1", "S"))
 
 
@@ -105,11 +99,42 @@ def image_dimensions(image_path: Path) -> tuple[int, int]:
         Image.MAX_IMAGE_PIXELS = original_limit
 
 
-def select_sample(manifest: dict[str, Any]) -> dict[str, Any]:
+def load_inference_config(path: Path) -> dict[str, Any]:
+    config = yaml.safe_load(path.read_text(encoding="utf-8"))
+    required = {"device", "half", "imgsz", "confidence", "iou", "max_det", "smoke_sample"}
+    missing = sorted(required - config.keys())
+    if missing:
+        raise ValueError(f"inference config is missing required keys: {missing}")
+    return config
+
+
+def request_from_config(config: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "prompt_set": "text",
+        "requested_imgsz": config["imgsz"],
+        "confidence": config["confidence"],
+        "iou": config["iou"],
+        "device": config["device"],
+        "half": config["half"],
+    }
+
+
+def runner_config(config: dict[str, Any]) -> dict[str, Any]:
+    return {key: config[key] for key in ("imgsz", "confidence", "iou", "max_det", "device", "half")}
+
+
+def select_sample(manifest: dict[str, Any], smoke_sample: dict[str, Any]) -> dict[str, Any]:
     for sample in manifest.get("samples", []):
-        if sample.get("enabled"):
-            return sample
-    raise ValueError("manifest contains no enabled sample")
+        if sample.get("sample_id") != smoke_sample.get("sample_id"):
+            continue
+        if not sample.get("enabled"):
+            raise ValueError("configured smoke sample is disabled")
+        if sample.get("version") != smoke_sample.get("required_version"):
+            raise ValueError("configured smoke sample does not match required_version")
+        if sample.get("sha256") != smoke_sample.get("sha256"):
+            raise ValueError("configured smoke sample sha256 does not match manifest")
+        return sample
+    raise ValueError("configured smoke sample_id is absent from manifest")
 
 
 def save_mask(mask: Any, destination: Path, width: int, height: int) -> None:
@@ -121,17 +146,18 @@ def save_mask(mask: Any, destination: Path, width: int, height: int) -> None:
 
 
 def run_yoloe(
-    model: dict[str, Any], data_root: Path, image_path: Path, sample: dict[str, Any], run_dir: Path, run_id: str
+    model: dict[str, Any], data_root: Path, image_path: Path, sample: dict[str, Any], run_dir: Path, run_id: str,
+    request: dict[str, Any], inference: dict[str, Any],
 ) -> dict[str, Any]:
     missing = yoloe_ultralytics.required_dependencies()
     if missing:
         return error_result(
-            run_id=run_id, sample_id=sample["sample_id"], model=model, request=REQUEST, status="dependency_missing",
+            run_id=run_id, sample_id=sample["sample_id"], model=model, request=request, status="dependency_missing",
             message="YOLOE smoke test skipped because optional dependencies are unavailable.", missing_dependencies=missing,
         )
     if not model["weight_exists"]:
         return error_result(
-            run_id=run_id, sample_id=sample["sample_id"], model=model, request=REQUEST, status="model_load_failed",
+            run_id=run_id, sample_id=sample["sample_id"], model=model, request=request, status="model_load_failed",
             message="registered YOLOE weight is missing",
         )
     width, height = image_dimensions(image_path)
@@ -140,16 +166,16 @@ def run_yoloe(
     except Exception as error:
         status = classify_exception(error)
         return error_result(
-            run_id=run_id, sample_id=sample["sample_id"], model=model, request=REQUEST,
+            run_id=run_id, sample_id=sample["sample_id"], model=model, request=request,
             status="oom" if status == "oom" else "model_load_failed", message=f"{type(error).__name__}: {error}",
         )
     try:
         started = time.perf_counter()
-        predictions = yoloe_ultralytics.predict_loaded(model_instance, image_path, INFERENCE)
+        predictions = yoloe_ultralytics.predict_loaded(model_instance, image_path, inference)
         elapsed = time.perf_counter() - started
     except Exception as error:
         return error_result(
-            run_id=run_id, sample_id=sample["sample_id"], model=model, request=REQUEST,
+            run_id=run_id, sample_id=sample["sample_id"], model=model, request=request,
             status=classify_exception(error), message=f"{type(error).__name__}: {error}",
         )
     detections: list[dict[str, Any]] = []
@@ -171,28 +197,31 @@ def run_yoloe(
     save_overlay(image_path, run_dir / "overlays" / overlay_name, boxes)
     return {
         "schema_version": "0.1", "run_id": run_id, "sample_id": sample["sample_id"], "model": model,
-        "request": REQUEST, "actual": {"input_width": width, "input_height": height, "processed_width": 640, "processed_height": 640},
+        "request": request, "actual": {"input_width": width, "input_height": height, "processed_width": inference["imgsz"], "processed_height": inference["imgsz"]},
         "detections": detections, "timing": {"inference_seconds": elapsed}, "gpu": gpu_snapshot(),
         "status": "success" if detections else "empty_result", "error": None,
     }
 
 
-def run_yolo_world(model: dict[str, Any], sample: dict[str, Any], run_id: str) -> dict[str, Any]:
+def run_yolo_world(model: dict[str, Any], sample: dict[str, Any], run_id: str, request: dict[str, Any]) -> dict[str, Any]:
     missing = yolo_world_v21.required_dependencies()
     if missing:
         return error_result(
-            run_id=run_id, sample_id=sample["sample_id"], model=model, request=REQUEST, status="dependency_missing",
+            run_id=run_id, sample_id=sample["sample_id"], model=model, request=request, status="dependency_missing",
             message="YOLO-World V2.1 smoke test skipped because optional dependencies are unavailable.", missing_dependencies=missing,
         )
     return error_result(
-        run_id=run_id, sample_id=sample["sample_id"], model=model, request=REQUEST, status="model_load_failed",
+        run_id=run_id, sample_id=sample["sample_id"], model=model, request=request, status="model_load_failed",
         message="YOLO-World V2.1 requires its matching MMYOLO model configuration; no configuration is bundled with the local checkpoint.",
     )
 
 
-def run_smoke(data_root: Path, manifest_path: Path, output_root: Path, run_id: str) -> dict[str, Any]:
+def run_smoke(data_root: Path, manifest_path: Path, output_root: Path, run_id: str, inference_config_path: Path) -> dict[str, Any]:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    sample = select_sample(manifest)
+    config = load_inference_config(inference_config_path)
+    request = request_from_config(config)
+    inference = runner_config(config)
+    sample = select_sample(manifest, config["smoke_sample"])
     image_path = data_root / sample["relative_path"]
     if not image_path.is_file():
         raise FileNotFoundError(f"manifest image does not exist: {sample['relative_path']}")
@@ -200,14 +229,17 @@ def run_smoke(data_root: Path, manifest_path: Path, output_root: Path, run_id: s
     run_dir = create_run_layout(output_root, run_id)
     environment = build_report(data_root)
     write_json(run_dir / "environment.json", environment)
-    write_json(run_dir / "run-config.json", {"run_id": run_id, "request": REQUEST, "inference": INFERENCE, "sample_id": sample["sample_id"]})
+    write_json(
+        run_dir / "run-config.json",
+        {"run_id": run_id, "request": request, "inference": inference, "smoke_sample": config["smoke_sample"]},
+    )
     results: list[dict[str, Any]] = []
     for family, variant in SMOKE_MODELS:
         model = find_model(data_root, family, variant)
         if family.startswith("YOLOE"):
-            result = run_yoloe(model, data_root, image_path, sample, run_dir, run_id)
+            result = run_yoloe(model, data_root, image_path, sample, run_dir, run_id, request, inference)
         else:
-            result = run_yolo_world(model, sample, run_id)
+            result = run_yolo_world(model, sample, run_id, request)
         filename = f"{sample['sample_id']}-{slug(family)}-{variant.lower()}.json"
         write_json(run_dir / "raw" / filename, raw_record(result))
         write_json(run_dir / "normalized" / filename, result)
@@ -227,9 +259,10 @@ def main() -> None:
     parser.add_argument("--data-root", type=Path, default=Path("data/local"))
     parser.add_argument("--manifest", type=Path, default=Path("data/local/yolo-model-selection/manifest.local.json"))
     parser.add_argument("--output-root", type=Path, default=Path("data/local/yolo-model-selection"))
+    parser.add_argument("--inference-config", type=Path, default=DEFAULT_INFERENCE_CONFIG)
     parser.add_argument("--run-id", required=True, help="Explicit, unique local run identifier; existing runs are never overwritten.")
     args = parser.parse_args()
-    print(json.dumps(run_smoke(args.data_root, args.manifest, args.output_root, args.run_id), ensure_ascii=False, indent=2))
+    print(json.dumps(run_smoke(args.data_root, args.manifest, args.output_root, args.run_id, args.inference_config), ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

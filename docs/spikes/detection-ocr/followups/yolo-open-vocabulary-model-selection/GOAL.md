@@ -25,15 +25,28 @@ Out of scope：完整提示词校准、40–60 页矩阵、OCR crop 指标、清
 
 ## 后续阶段门禁
 
-1. **提示词校准**：只有 manifest、环境快照、三族最小 smoke 结果均存在（允许 `dependency_missing`）且结果 schema 有效时开始。
-2. **模型尺寸与分辨率矩阵**：只有确定提示词组、权重 hash 与设备参数已锁定时开始；不得自动降低分辨率或 CPU 回退。
-3. **OCR crop 与清字-mask 评估**：只有前一轮选出有限候选模型后开始；YOLO-World 仅进入 bbox/OCR 召回比较，不能进入 mask 评分。
-4. **报告与架构决策**：只有下游结果、资源证据、失败样本和许可证审查齐备时开始。
+当前准确状态：
+
+```text
+Preparation：完成
+结构化失败 smoke：完成
+真实 GPU smoke inference：尚未完成
+Prompt calibration：尚未解锁
+```
+
+`dependency_missing` 只能证明失败路径与结果保存机制有效，不能证明模型通过 smoke test。
+
+1. **Preparation**：manifest、环境快照、权重核验、配置、schema 与结构化失败结果可以在 `dependency_missing` 下通过。
+2. **提示词校准**：只有 YOLOE-26N、YOLOE-11S、YOLO-World V2.1-S 均完成真实 GPU 推理，且各自状态为 `success` 或 `empty_result` 时开始。若任何模型仍为 `dependency_missing`、`model_load_failed`、`runtime_error` 或 `oom`，必须显式缩减候选范围或继续修复，不得默认进入校准。
+3. **模型尺寸与分辨率矩阵**：只有确定提示词组、权重 hash 与设备参数已锁定时开始；不得自动降低分辨率或 CPU 回退。
+4. **OCR crop 与清字-mask 评估**：只有前一轮选出有限候选模型后开始；YOLO-World 仅进入 bbox/OCR 召回比较，不能进入 mask 评分。
+5. **报告与架构决策**：只有下游结果、资源证据、失败样本和许可证审查齐备时开始。
 
 ## 决策与理由
 
 - 将实验留在 `tools/spikes/**` 和 `data/local/**`：符合 Provider Adapter、ArtifactService 与 SQLite 的架构边界，也避免研究输出污染正式生命周期。
 - 用内容 SHA-256 加相对路径生成 `sample_id`：同一文件的身份可复现，并避免可提交文件泄漏绝对路径。
+- smoke 样本固定为 `sample_1308c0383ed99a66`（`original`，SHA-256 `b3dbd5a863d2ff8b4d54d26f1bdf7cc7be8a83bf0551e208dc4a08500b2e93b7`）：该页经人工核验，包含多个普通气泡、清晰竖排日文，背景不过度复杂；不会误选翻译版或无字版。
 - 统一存储原图坐标 bbox 与归一化 bbox：overlay 可以无歧义回映射到原图；YOLO-World 不会获得伪造 mask。
 - 所有 run 强制显式 `run_id` 且拒绝已有目录：失败结果可保留，重跑不能覆盖证据。
 
@@ -49,6 +62,7 @@ Out of scope：完整提示词校准、40–60 页矩阵、OCR crop 指标、清
 - YOLO-World V2.1 checkpoint 还需要匹配的 MMYOLO 配置；本仓库未捆绑该配置。
 - 当前环境的可选推理包可能缺失或二进制不兼容；这应作为结构化证据，而非由脚本修复。
 - 三个版本目录位于每部作品下且存在名称差异；manifest 只据父目录中的无字/中文标记归为 `original`、`translated`、`cleaned`，不推断任何复杂语义 `tags`。
+- `original ↔ cleaned` 可在后续产生清字差异证据，但三类数量不一致，不能按排序配对。进入 cleaning-mask evaluation 前应另建仅本地的 `pairing.local.json`，依据作品、相对页路径、尺寸和人工抽查匹配；本轮不实现。
 - 许可证、NSFW/内容策略和开放词汇提示词的实际效果均留待后续轮次确认。
 
 ## 验证场景

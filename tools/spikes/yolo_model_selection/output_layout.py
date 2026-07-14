@@ -22,4 +22,3 @@ def create_run_layout(output_root: Path, run_id: str) -> Path:
     for child in RUN_CHILDREN:
         (run_dir / child).mkdir()
     return run_dir
-

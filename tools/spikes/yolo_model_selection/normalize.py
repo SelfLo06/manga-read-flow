@@ -32,4 +32,3 @@ def normalized_detection(
     if mask_path is not None:
         detection["mask_path"] = mask_path
     return detection
-

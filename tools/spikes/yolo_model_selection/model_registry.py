@@ -8,13 +8,13 @@ from typing import Any
 
 
 MODEL_SPECS = (
-    ("YOLOE-26", "N", "segmentation", "ultralytics", "models/yoloe-26/yoloe-26n-seg.pt", True, True, "smoke"),
-    ("YOLOE-26", "S", "segmentation", "ultralytics", "models/yoloe-26/yoloe-26s-seg.pt", True, True, "candidate"),
-    ("YOLOE-26", "M", "segmentation", "ultralytics", "models/yoloe-26/yoloe-26m-seg.pt", True, True, "candidate"),
-    ("YOLOE-11", "S", "segmentation", "ultralytics", "models/yoloe-11/yoloe-11s-seg.pt", True, True, "smoke"),
-    ("YOLOE-11", "M", "segmentation", "ultralytics", "models/yoloe-11/yoloe-11m-seg.pt", True, True, "baseline"),
-    ("YOLO-World V2.1", "S", "detection", "mmyolo", "models/yolo-world-v2.1/s_stage1-d1c1d7d8.pth", True, False, "smoke"),
-    ("YOLO-World V2.1", "M", "detection", "mmyolo", "models/yolo-world-v2.1/m_stage1-7e1e5299.pth", True, False, "baseline"),
+    ("YOLOE-26", "N", "segmentation", "ultralytics", "models/yoloe-26/yoloe-26n-seg.pt", True, True, "smoke", False, None),
+    ("YOLOE-26", "S", "segmentation", "ultralytics", "models/yoloe-26/yoloe-26s-seg.pt", True, True, "candidate", False, None),
+    ("YOLOE-26", "M", "segmentation", "ultralytics", "models/yoloe-26/yoloe-26m-seg.pt", True, True, "candidate", False, None),
+    ("YOLOE-11", "S", "segmentation", "ultralytics", "models/yoloe-11/yoloe-11s-seg.pt", True, True, "smoke", False, None),
+    ("YOLOE-11", "M", "segmentation", "ultralytics", "models/yoloe-11/yoloe-11m-seg.pt", True, True, "baseline", False, None),
+    ("YOLO-World V2.1", "S", "detection", "mmyolo", "models/yolo-world-v2.1/s_stage1-d1c1d7d8.pth", True, False, "smoke", True, None),
+    ("YOLO-World V2.1", "M", "detection", "mmyolo", "models/yolo-world-v2.1/m_stage1-7e1e5299.pth", True, False, "baseline", True, None),
 )
 
 
@@ -29,8 +29,9 @@ def sha256_file(path: Path) -> str:
 def registry(data_root: Path) -> list[dict[str, Any]]:
     """Return all seven model records, including existence and immutable hash evidence."""
     models: list[dict[str, Any]] = []
-    for family, variant, task_type, framework, relative_weight, bbox, mask, role in MODEL_SPECS:
+    for family, variant, task_type, framework, relative_weight, bbox, mask, role, config_required, config_path in MODEL_SPECS:
         path = data_root / relative_weight
+        resolved_config = data_root / config_path if config_path is not None else None
         models.append(
             {
                 "family": family,
@@ -44,6 +45,10 @@ def registry(data_root: Path) -> list[dict[str, Any]]:
                 "supports_bbox": bbox,
                 "supports_mask": mask,
                 "default_role": role,
+                "config_required": config_required,
+                "config_path": config_path,
+                "config_exists": resolved_config.is_file() if resolved_config is not None else False,
+                "config_sha256": sha256_file(resolved_config) if resolved_config is not None and resolved_config.is_file() else None,
             }
         )
     return models
@@ -54,4 +59,3 @@ def find_model(data_root: Path, family: str, variant: str) -> dict[str, Any]:
         if model["family"] == family and model["variant"] == variant:
             return model
     raise KeyError(f"unregistered model: {family} {variant}")
-

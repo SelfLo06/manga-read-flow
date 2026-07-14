@@ -1,8 +1,13 @@
+weights_root: data/local
 models:
   - family: YOLOE-26
     variants: [N, S, M]
     task_type: segmentation
     framework: ultralytics
+    supports_bbox: true
+    supports_mask: true
+    config_required: false
+    config_path: null
     weights:
       N: models/yoloe-26/yoloe-26n-seg.pt
       S: models/yoloe-26/yoloe-26s-seg.pt
@@ -12,6 +17,10 @@ models:
     variants: [S, M]
     task_type: segmentation
     framework: ultralytics
+    supports_bbox: true
+    supports_mask: true
+    config_required: false
+    config_path: null
     weights:
       S: models/yoloe-11/yoloe-11s-seg.pt
       M: models/yoloe-11/yoloe-11m-seg.pt
@@ -20,8 +29,11 @@ models:
     variants: [S, M]
     task_type: detection
     framework: mmyolo
+    supports_bbox: true
+    supports_mask: false
+    config_required: true
+    config_path: null
     weights:
       S: models/yolo-world-v2.1/s_stage1-d1c1d7d8.pth
       M: models/yolo-world-v2.1/m_stage1-7e1e5299.pth
     default_role: open-vocabulary recall baseline
-    supports_mask: false
