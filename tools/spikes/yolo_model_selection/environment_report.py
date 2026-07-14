@@ -13,12 +13,14 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from .model_registry import registry
+    from .model_registry import load_registry
 except ImportError:
-    from model_registry import registry
+    from model_registry import load_registry
 
 
-PACKAGES = ("torch", "ultralytics", "mmengine", "mmdet", "mmcv", "mmyolo")
+REPO_ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_MODELS_CONFIG = REPO_ROOT / "docs/spikes/detection-ocr/followups/yolo-open-vocabulary-model-selection/configs/models.yaml"
+PACKAGES = ("torch", "torchvision", "ultralytics", "clip", "mmengine", "mmdet", "mmcv", "mmyolo")
 
 
 def package_version(name: str) -> str | None:
@@ -46,7 +48,7 @@ def nvidia_smi() -> dict[str, str | None]:
     return dict(zip(("name", "total_memory", "driver"), fields, strict=False))
 
 
-def build_report(data_root: Path) -> dict[str, Any]:
+def build_report(registry_snapshot: dict[str, Any]) -> dict[str, Any]:
     versions = {name: package_version(name) for name in PACKAGES}
     torch_info: dict[str, Any] = {"version": versions["torch"], "cuda_runtime": None, "cuda_available": False}
     if versions["torch"]:
@@ -65,17 +67,22 @@ def build_report(data_root: Path) -> dict[str, Any]:
         "gpu": nvidia_smi(),
         "packages": versions,
         "git": {"commit": git_value("rev-parse", "HEAD"), "branch": git_value("branch", "--show-current")},
-        "models": registry(data_root),
+        "registry": {
+            "models_config": registry_snapshot["models_config"],
+            "weights_root": registry_snapshot["weights_root"],
+            "assets": registry_snapshot["assets"],
+        },
+        "models": registry_snapshot["models"],
         "missing_dependencies": sorted(name for name, version in versions.items() if version is None),
     }
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--data-root", type=Path, default=Path("data/local"))
+    parser.add_argument("--models-config", type=Path, default=DEFAULT_MODELS_CONFIG)
     parser.add_argument("--output", type=Path, default=Path("data/local/yolo-model-selection/environment.json"))
     args = parser.parse_args()
-    report = build_report(args.data_root)
+    report = build_report(load_registry(args.models_config, REPO_ROOT))
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"wrote environment snapshot to {args.output}")

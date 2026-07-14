@@ -38,3 +38,16 @@ Preparation
 ```
 
 在进入 cleaning-mask evaluation 前，另行建立本地 `pairing.local.json`；本轮不实现配对逻辑。
+
+当前执行状态：
+
+```text
+Preparation Gate：PASS
+YOLOE Runtime Enablement：PASS
+  YOLOE-26N@640：empty_result
+  YOLOE-11S@640：empty_result
+YOLO-World Runtime Enablement：待执行
+Prompt Calibration：继续锁定
+```
+
+YOLOE smoke 的 GPU 显存与耗时只作为链路诊断证据；`warmup_runs`、`timed_runs`、CUDA 同步、按模型重置峰值显存和真正框架 raw output 仍是 Prompt Calibration 前债务。

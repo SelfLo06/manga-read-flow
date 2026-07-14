@@ -30,7 +30,8 @@ Out of scope：完整提示词校准、40–60 页矩阵、OCR crop 指标、清
 ```text
 Preparation：完成
 结构化失败 smoke：完成
-真实 GPU smoke inference：尚未完成
+YOLOE GPU smoke inference：完成（YOLOE-26N 与 YOLOE-11S 均为 empty_result）
+YOLO-World GPU smoke inference：尚未完成
 Prompt calibration：尚未解锁
 ```
 
@@ -49,6 +50,9 @@ Prompt calibration：尚未解锁
 - smoke 样本固定为 `sample_1308c0383ed99a66`（`original`，SHA-256 `b3dbd5a863d2ff8b4d54d26f1bdf7cc7be8a83bf0551e208dc4a08500b2e93b7`）：该页经人工核验，包含多个普通气泡、清晰竖排日文，背景不过度复杂；不会误选翻译版或无字版。
 - 统一存储原图坐标 bbox 与归一化 bbox：overlay 可以无歧义回映射到原图；YOLO-World 不会获得伪造 mask。
 - 所有 run 强制显式 `run_id` 且拒绝已有目录：失败结果可保留，重跑不能覆盖证据。
+- `configs/models.yaml` 是七个模型与共享资产的唯一 registry 来源：环境报告与 smoke 共用同一加载、路径安全、存在性、大小和 SHA-256 校验 snapshot，不再维护代码内模型清单。
+- YOLOE-26 与 YOLOE-11 分别固定并校验 `mobileclip2_b.ts` 与 `mobileclip_blt.ts`：调用 `set_classes` 时只允许解析已登记的本地资产，禁止 Ultralytics 自动下载或自动安装依赖。
+- YOLOE runtime 固定在独立 `manga-yoloe` 环境：Python 3.11、Torch 2.9.1+cu126、Torchvision 0.24.1+cu126、Ultralytics 8.4.0；不修改项目依赖文件。
 
 ## 被拒绝的方案
 
@@ -61,6 +65,7 @@ Prompt calibration：尚未解锁
 
 - YOLO-World V2.1 checkpoint 还需要匹配的 MMYOLO 配置；本仓库未捆绑该配置。
 - 当前环境的可选推理包可能缺失或二进制不兼容；这应作为结构化证据，而非由脚本修复。
+- 两个 YOLOE 最小模型在固定原版页面上均得到 `empty_result`；这证明 GPU 加载、推理、解析和空结果保存链路可用，但不证明当前 `text` 提示词具有漫画文字召回能力。计时仅作诊断证据，不作性能结论。
 - 三个版本目录位于每部作品下且存在名称差异；manifest 只据父目录中的无字/中文标记归为 `original`、`translated`、`cleaned`，不推断任何复杂语义 `tags`。
 - `original ↔ cleaned` 可在后续产生清字差异证据，但三类数量不一致，不能按排序配对。进入 cleaning-mask evaluation 前应另建仅本地的 `pairing.local.json`，依据作品、相对页路径、尺寸和人工抽查匹配；本轮不实现。
 - 许可证、NSFW/内容策略和开放词汇提示词的实际效果均留待后续轮次确认。

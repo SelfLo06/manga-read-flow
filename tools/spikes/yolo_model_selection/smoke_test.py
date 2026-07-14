@@ -19,7 +19,7 @@ import yaml
 
 try:
     from .environment_report import build_report
-    from .model_registry import find_model
+    from .model_registry import asset_path, find_model, load_registry, weight_path
     from .normalize import normalized_detection
     from .output_layout import create_run_layout
     from .overlays import save_overlay
@@ -28,7 +28,7 @@ try:
     from .schemas import error_result
 except ImportError:
     from environment_report import build_report
-    from model_registry import find_model
+    from model_registry import asset_path, find_model, load_registry, weight_path
     from normalize import normalized_detection
     from output_layout import create_run_layout
     from overlays import save_overlay
@@ -39,6 +39,7 @@ except ImportError:
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_INFERENCE_CONFIG = REPO_ROOT / "docs/spikes/detection-ocr/followups/yolo-open-vocabulary-model-selection/configs/inference.yaml"
+DEFAULT_MODELS_CONFIG = REPO_ROOT / "docs/spikes/detection-ocr/followups/yolo-open-vocabulary-model-selection/configs/models.yaml"
 SMOKE_MODELS = (("YOLOE-26", "N"), ("YOLOE-11", "S"), ("YOLO-World V2.1", "S"))
 
 
@@ -146,7 +147,7 @@ def save_mask(mask: Any, destination: Path, width: int, height: int) -> None:
 
 
 def run_yoloe(
-    model: dict[str, Any], data_root: Path, image_path: Path, sample: dict[str, Any], run_dir: Path, run_id: str,
+    model: dict[str, Any], registry_snapshot: dict[str, Any], image_path: Path, sample: dict[str, Any], run_dir: Path, run_id: str,
     request: dict[str, Any], inference: dict[str, Any],
 ) -> dict[str, Any]:
     missing = yoloe_ultralytics.required_dependencies()
@@ -160,9 +161,27 @@ def run_yoloe(
             run_id=run_id, sample_id=sample["sample_id"], model=model, request=request, status="model_load_failed",
             message="registered YOLOE weight is missing",
         )
+    asset_name = model.get("text_encoder_asset")
+    if not asset_name:
+        return error_result(
+            run_id=run_id, sample_id=sample["sample_id"], model=model, request=request, status="model_load_failed",
+            message="registered YOLOE model has no local text encoder asset",
+        )
+    encoder = registry_snapshot["assets"][asset_name]
+    if encoder["integrity_status"] != "verified":
+        return error_result(
+            run_id=run_id, sample_id=sample["sample_id"], model=model, request=request, status="model_load_failed",
+            message=f"registered YOLOE text encoder integrity status is {encoder['integrity_status']}",
+        )
     width, height = image_dimensions(image_path)
     try:
-        model_instance = yoloe_ultralytics.load_model(data_root / model["weight_path"], ["text"])
+        model_instance = yoloe_ultralytics.load_model(
+            weight_path(registry_snapshot, model),
+            ["text"],
+            asset_path(registry_snapshot, encoder),
+            encoder["expected_size_bytes"],
+            encoder["expected_sha256"],
+        )
     except Exception as error:
         status = classify_exception(error)
         return error_result(
@@ -216,7 +235,14 @@ def run_yolo_world(model: dict[str, Any], sample: dict[str, Any], run_id: str, r
     )
 
 
-def run_smoke(data_root: Path, manifest_path: Path, output_root: Path, run_id: str, inference_config_path: Path) -> dict[str, Any]:
+def run_smoke(
+    data_root: Path,
+    manifest_path: Path,
+    output_root: Path,
+    run_id: str,
+    inference_config_path: Path,
+    models_config_path: Path,
+) -> dict[str, Any]:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     config = load_inference_config(inference_config_path)
     request = request_from_config(config)
@@ -226,18 +252,25 @@ def run_smoke(data_root: Path, manifest_path: Path, output_root: Path, run_id: s
     if not image_path.is_file():
         raise FileNotFoundError(f"manifest image does not exist: {sample['relative_path']}")
     image_dimensions(image_path)
+    registry_snapshot = load_registry(models_config_path, REPO_ROOT)
     run_dir = create_run_layout(output_root, run_id)
-    environment = build_report(data_root)
+    environment = build_report(registry_snapshot)
     write_json(run_dir / "environment.json", environment)
     write_json(
         run_dir / "run-config.json",
-        {"run_id": run_id, "request": request, "inference": inference, "smoke_sample": config["smoke_sample"]},
+        {
+            "run_id": run_id,
+            "request": request,
+            "inference": inference,
+            "smoke_sample": config["smoke_sample"],
+            "models_config": str(models_config_path),
+        },
     )
     results: list[dict[str, Any]] = []
     for family, variant in SMOKE_MODELS:
-        model = find_model(data_root, family, variant)
+        model = find_model(registry_snapshot, family, variant)
         if family.startswith("YOLOE"):
-            result = run_yoloe(model, data_root, image_path, sample, run_dir, run_id, request, inference)
+            result = run_yoloe(model, registry_snapshot, image_path, sample, run_dir, run_id, request, inference)
         else:
             result = run_yolo_world(model, sample, run_id, request)
         filename = f"{sample['sample_id']}-{slug(family)}-{variant.lower()}.json"
@@ -260,9 +293,23 @@ def main() -> None:
     parser.add_argument("--manifest", type=Path, default=Path("data/local/yolo-model-selection/manifest.local.json"))
     parser.add_argument("--output-root", type=Path, default=Path("data/local/yolo-model-selection"))
     parser.add_argument("--inference-config", type=Path, default=DEFAULT_INFERENCE_CONFIG)
+    parser.add_argument("--models-config", type=Path, default=DEFAULT_MODELS_CONFIG)
     parser.add_argument("--run-id", required=True, help="Explicit, unique local run identifier; existing runs are never overwritten.")
     args = parser.parse_args()
-    print(json.dumps(run_smoke(args.data_root, args.manifest, args.output_root, args.run_id, args.inference_config), ensure_ascii=False, indent=2))
+    print(
+        json.dumps(
+            run_smoke(
+                args.data_root,
+                args.manifest,
+                args.output_root,
+                args.run_id,
+                args.inference_config,
+                args.models_config,
+            ),
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
 
 
 if __name__ == "__main__":
