@@ -218,6 +218,9 @@ __marimo__/
 .streamlit/secrets.toml
 
 #codex
+
+# Local-only Cleaning Benchmark Pilot review images and candidate masks.
+artifacts/cleaning-benchmark-pilot/
 .codex
 AGENTS.md
 
@@ -245,3 +248,10 @@ artifacts/dataset-audit/
 .tmp/dataset-audit/
 
 docs/spikes/cleaning-dataset-audit
+
+# Current local-only spike implementation and benchmark outputs.
+docs/spikes/cleaning-benchmark-pilot/
+tests/tools/
+tools/__init__.py
+tools/cleaning_benchmark_pilot/
+tools/dataset_audit/
