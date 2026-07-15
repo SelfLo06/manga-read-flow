@@ -35,6 +35,8 @@ docs/spikes/cleaning/followups/text-seeded-container-association/GOAL2-HARNESS-C
 
 Goal 3 的结果见 `GOAL3-R0-VALIDATION-REPORT-v0.1.md` 与 `GOAL3-GATE-v0.1.md`。当前不得进入 Pixel Text Mask；继续前需新开 focused association correction Goal。
 
+4. Goal 4 — Focused Association Correction：`COMPLETE`；最终冻结 `B1_STRONG_BASELINE_ONLY`，corrected P1 未被选择，不进入 Pixel Text Mask 或 Cleaning。详见 `GOAL4-FOCUSED-CORRECTION-REPORT-v0.1.md` 与 `GOAL4-GATE-v0.1.md`。
+
 ## 3. 后续经评审授权后的允许范围
 
 仅在维护者批准本设计并另行授权实现后，允许：

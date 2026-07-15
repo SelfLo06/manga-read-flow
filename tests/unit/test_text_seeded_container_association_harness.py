@@ -16,10 +16,20 @@ HARNESS_PATH = (
     / "text_seeded_container_association"
     / "harness.py"
 )
+FOCUSED_CORRECTION_PATH = HARNESS_PATH.with_name("focused_correction.py")
 
 
 def load_harness(name: str = "text_seeded_container_harness"):
     spec = importlib.util.spec_from_file_location(name, HARNESS_PATH)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_focused_correction(name: str = "text_seeded_container_focused_correction"):
+    spec = importlib.util.spec_from_file_location(name, FOCUSED_CORRECTION_PATH)
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     sys.modules[name] = module
@@ -217,3 +227,186 @@ def test_output_json_uses_rle_and_does_not_claim_cleaning_or_pixel_text_mask():
         "REVIEW_REQUIRED",
         "SKIP",
     }
+
+
+def test_corrected_pair_scorer_can_merge_compatible_cross_upstream_groups():
+    harness = load_focused_correction("text_seeded_container_harness_corrected_pair")
+    left = fragment(harness, "p1", 50, 30, 18, 80, "g1")
+    right = fragment(harness, "p2", 70, 32, 18, 78, "g2")
+    blank = np.full((150, 180, 3), 255, dtype=np.uint8)
+    separated = blank.copy()
+    separated[:, 68:70] = 0
+
+    compatible = harness.score_same_container_v2(
+        page(harness, [left, right], width=180, height=150, image=blank),
+        left,
+        right,
+    )
+    blocked = harness.score_same_container_v2(
+        page(harness, [left, right], width=180, height=150, image=separated),
+        left,
+        right,
+    )
+
+    assert compatible.features["same_upstream_group"] == 0.0
+    assert compatible.score >= 0.75
+    assert blocked.score < compatible.score
+
+
+def test_group_scorer_uses_conservative_minimum_member_pair_score():
+    harness = load_focused_correction("text_seeded_container_harness_group_pair")
+    left_items = (
+        fragment(harness, "l1", 20, 25, 18, 70, "g1"),
+        fragment(harness, "l2", 42, 25, 18, 70, "g1"),
+    )
+    right_items = (fragment(harness, "r1", 90, 25, 18, 70, "g2"),)
+    image = np.full((120, 140, 3), 255, dtype=np.uint8)
+    image[:, 67:70] = 0
+    input_page = page(harness, [*left_items, *right_items], width=140, height=120, image=image)
+
+    member_scores = [
+        harness.score_same_container_v2(input_page, item, right_items[0]).score
+        for item in left_items
+    ]
+    group_score = harness.score_group_same_container_v2(input_page, left_items, right_items)
+
+    assert group_score.score == min(member_scores)
+    assert group_score.features["member_pair_count"] == 2.0
+
+
+def test_corrected_p1_bounds_free_text_support_without_touching_roi_edges():
+    harness = load_focused_correction("text_seeded_container_harness_corrected_support")
+    seed = fragment(harness, "p1", 92, 78, 14, 64, "g1")
+    policy = harness.CorrectedP1Policy(
+        thresholds=harness.SameContainerThresholds(different=0.40, same=0.75),
+        max_geodesic_cost=20.0,
+        support_padding_scale=2.0,
+        max_support_area_ratio=0.20,
+        max_merged_support_area_ratio=0.50,
+        regionless_uncertain_orientation=True,
+        regionless_extreme_span_ratio=0.90,
+        regionless_seed_bbox_area_ratio=0.20,
+    )
+
+    result = harness.run_corrected_p1(
+        page(harness, [seed], width=200, height=220),
+        policy,
+    )
+
+    assert result.method_id == "P1-corrected-v1"
+    assert len(result.regions) == 1
+    mask = result.regions[0].mask
+    assert mask is not None
+    assert mask.mean() <= 0.20
+    assert not mask[0, :].any()
+    assert not mask[-1, :].any()
+    assert not mask[:, 0].any()
+    assert not mask[:, -1].any()
+    assert result.recommended_decision == "REVIEW_REQUIRED"
+    assert "free_text_requires_review" in result.abstention_reasons
+
+
+def test_corrected_p1_merges_cross_group_sources_before_bounded_propagation():
+    harness = load_focused_correction("text_seeded_container_harness_corrected_merge")
+    fragments = [
+        fragment(harness, "p1", 70, 40, 18, 80, "g1"),
+        fragment(harness, "p2", 91, 42, 18, 78, "g2"),
+    ]
+    policy = harness.CorrectedP1Policy(
+        thresholds=harness.SameContainerThresholds(different=0.40, same=0.75),
+        max_geodesic_cost=20.0,
+        support_padding_scale=2.0,
+        max_support_area_ratio=0.40,
+        max_merged_support_area_ratio=0.50,
+        regionless_uncertain_orientation=True,
+        regionless_extreme_span_ratio=0.90,
+        regionless_seed_bbox_area_ratio=0.20,
+    )
+
+    result = harness.run_corrected_p1(
+        page(harness, fragments, width=200, height=180),
+        policy,
+    )
+
+    assert len(result.regions) == 1
+    assert result.regions[0].fragment_ids == ("p1", "p2")
+    assert result.same_container_decisions[0].decision == "same"
+    assert not result.virtual_boundary.any()
+
+
+def test_corrected_p1_emits_regionless_abstention_for_isolated_uncertain_seed():
+    harness = load_focused_correction("text_seeded_container_harness_regionless")
+    uncertain_seed = fragment(harness, "fp1", 80, 70, 32, 34, "g1")
+    policy = harness.CorrectedP1Policy(
+        thresholds=harness.SameContainerThresholds(different=0.40, same=0.75),
+        max_geodesic_cost=20.0,
+        support_padding_scale=2.0,
+        max_support_area_ratio=0.20,
+        max_merged_support_area_ratio=0.50,
+        regionless_uncertain_orientation=True,
+        regionless_extreme_span_ratio=0.90,
+        regionless_seed_bbox_area_ratio=0.20,
+    )
+
+    result = harness.run_corrected_p1(
+        page(harness, [uncertain_seed], width=200, height=180),
+        policy,
+    )
+    payload = result.to_jsonable()
+
+    assert len(result.regions) == 1
+    assert result.regions[0].mask is None
+    assert result.recommended_decision == "SKIP"
+    assert "regionless_uncertain_isolated_seed" in result.abstention_reasons
+    assert payload["regions"][0]["mask_rle"] is None
+
+
+def test_prepared_corrected_p1_matches_direct_execution():
+    harness = load_focused_correction("text_seeded_container_harness_prepared")
+    fragments = [
+        fragment(harness, "p1", 70, 40, 18, 80, "g1"),
+        fragment(harness, "p2", 91, 42, 18, 78, "g2"),
+    ]
+    policy = harness.CorrectedP1Policy(
+        thresholds=harness.SameContainerThresholds(different=0.40, same=0.75),
+        max_geodesic_cost=16.0,
+        support_padding_scale=1.5,
+        max_support_area_ratio=0.40,
+        max_merged_support_area_ratio=0.50,
+        regionless_uncertain_orientation=True,
+        regionless_extreme_span_ratio=0.90,
+        regionless_seed_bbox_area_ratio=0.20,
+    )
+    input_page = page(harness, fragments, width=200, height=180)
+
+    direct = harness.run_corrected_p1(input_page, policy)
+    prepared = harness.run_prepared_corrected_p1(
+        harness.prepare_corrected_p1(input_page, policy.thresholds),
+        policy,
+    )
+
+    assert direct.to_jsonable() == prepared.to_jsonable()
+
+
+def test_corrected_p1_abstains_on_single_extreme_span_seed():
+    harness = load_focused_correction("text_seeded_container_harness_extreme_span")
+    seed = fragment(harness, "title", 20, 10, 25, 180, "g1")
+    policy = harness.CorrectedP1Policy(
+        thresholds=harness.SameContainerThresholds(different=0.30, same=0.85),
+        max_geodesic_cost=8.0,
+        support_padding_scale=0.75,
+        max_support_area_ratio=0.50,
+        max_merged_support_area_ratio=0.50,
+        regionless_uncertain_orientation=True,
+        regionless_extreme_span_ratio=0.90,
+        regionless_seed_bbox_area_ratio=0.20,
+    )
+
+    result = harness.run_corrected_p1(
+        page(harness, [seed], width=100, height=200),
+        policy,
+    )
+
+    assert result.regions[0].mask is None
+    assert result.recommended_decision == "SKIP"
+    assert "regionless_extreme_span_seed" in result.abstention_reasons
