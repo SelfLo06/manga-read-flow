@@ -171,15 +171,15 @@ GO_TO_PIXEL_TEXT_MASK_SPIKE
 
 - pixel-accurate visible / virtual boundary GT；
 - visible / virtual boundary uncertainty-band 数值；
-- S1 base Detection/OCR + Grouping cold run 或 targeted extension；
-- calibration/evaluation asset 隔离；
-- `P_same_container` 的 calibration-only 阈值搜索空间、门禁和选择目标。
+- pixel-accurate R0 scoring protocol；
+- P1 相对 B0/B1 的 R0 实际安全收益；
+- expanded validation 的 R1 / S2 / S3 设计（当前最小 Spike 延后）。
 
 剩余开放项不得在实现中静默猜测：
 
 1. R0 只允许使用分类、容器数量、same/different topology、跨容器泄漏、abstention 与相对 A coarse reference 的定性/宽容差评估；
 2. R0 禁止宣称 pixel-accurate segmentation、精确 boundary F1、双人边界一致性或已冻结 uncertainty-band 数值；
 3. S1 已冻结为新的六例统一 blind run `20260715T075811Z-3e9711`；历史 base chain 只保留为证据，不与新结果拼接；
-4. `P_same_container` scorer 尚不存在，实际数值阈值只能在重新批准的 calibration assets 上产出；此前所有 pair 必须 `uncertain`；
+4. Goal 2 已实现最小 scorer，并仅用 `cal-01/cal-02` 冻结 `T_different=0.40`、`T_same=0.75`；Goal 3 只读且不得根据 R0 回调；
 5. P2 的实际收益仍须在 P1 uncertain subset 上验证；
 6. R1 最低 37 region 已由维护者从当前最小技术 Spike 延后，不是本轮 GO/FURTHER/NO-GO 的前置条件。

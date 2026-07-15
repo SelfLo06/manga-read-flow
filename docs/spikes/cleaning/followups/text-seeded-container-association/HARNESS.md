@@ -195,6 +195,20 @@ T_same      ∈ {0.80, 0.85, 0.90, 0.95}
 
 数值冻结前所有 pair 都必须 `uncertain / REVIEW_REQUIRED`。R0 与其他 evaluation-only asset 不得参与阈值选择；evaluation 失败不得触发重调。
 
+Goal 2 已在维护者批准的最小 `cal-01/cal-02` split 上重新批准并执行独立网格，旧 v0.2 网格仍保持退役：
+
+```text
+T_different ∈ {0.40, 0.45, 0.50, 0.55, 0.60}
+T_same      ∈ {0.70, 0.75, 0.80, 0.85, 0.90}
+minimum empirical margin = 0.20
+
+selected T_different = 0.40
+selected T_same      = 0.75
+empirical margin     = 0.42618291751598514
+```
+
+完整 feature、pair、hash、sanity 输出和限制见 `GOAL2-HARNESS-CALIBRATION-v0.1.md`。该 lock 只供 Goal 3 的冻结 R0 轻量矩阵读取；R0 不得用于回调阈值。
+
 ## 8. 指标定义
 
 ### 8.1 Grouping

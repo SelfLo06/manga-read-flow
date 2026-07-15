@@ -1,7 +1,7 @@
 # Text-Seeded Container Association Spike — PLAN
 
 版本：v0.3
-状态：Goal 1 S1 Input Freeze Complete / Association 未实施
+状态：Goal 2 Minimal Harness + Calibration Complete / Goal 3 未运行
 
 ## 1. 目标与执行原则
 
@@ -24,7 +24,14 @@ docs/spikes/cleaning/followups/text-seeded-container-association/CANDIDATE-EXPAN
 docs/spikes/cleaning/followups/text-seeded-container-association/R0-SELECTION-v0.3.md
 docs/spikes/cleaning/followups/text-seeded-container-association/R0-ADJUDICATION-v0.3.md
 docs/spikes/cleaning/followups/text-seeded-container-association/S1-INPUT-FREEZE-v0.1.md
+docs/spikes/cleaning/followups/text-seeded-container-association/GOAL2-HARNESS-CALIBRATION-v0.1.md
 ```
+
+当前三个 Goal 的状态：
+
+1. Goal 1 — R0 / calibration 输入与 S1 freeze：`COMPLETE`；
+2. Goal 2 — 最小 B0/B1/P1 Harness 与 calibration-only threshold lock：`COMPLETE`；
+3. Goal 3 — 冻结 R0 上的一次轻量 B0/B1/P1 运行、人工宽容差评分与独立 verdict：`NOT STARTED`。
 
 ## 3. 后续经评审授权后的允许范围
 
