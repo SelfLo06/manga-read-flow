@@ -1,7 +1,7 @@
 # Text-Seeded Container Association Spike — PLAN
 
 版本：v0.3
-状态：Goal 2 Minimal Harness + Calibration Complete / Goal 3 未运行
+状态：Goal 3 R0 Validation Complete / Verdict FURTHER_SPIKE
 
 ## 1. 目标与执行原则
 
@@ -31,7 +31,9 @@ docs/spikes/cleaning/followups/text-seeded-container-association/GOAL2-HARNESS-C
 
 1. Goal 1 — R0 / calibration 输入与 S1 freeze：`COMPLETE`；
 2. Goal 2 — 最小 B0/B1/P1 Harness 与 calibration-only threshold lock：`COMPLETE`；
-3. Goal 3 — 冻结 R0 上的一次轻量 B0/B1/P1 运行、人工宽容差评分与独立 verdict：`NOT STARTED`。
+3. Goal 3 — 冻结 R0 上的一次轻量 B0/B1/P1 运行、人工宽容差评分与 verdict：`COMPLETE / FURTHER_SPIKE`。
+
+Goal 3 的结果见 `GOAL3-R0-VALIDATION-REPORT-v0.1.md` 与 `GOAL3-GATE-v0.1.md`。当前不得进入 Pixel Text Mask；继续前需新开 focused association correction Goal。
 
 ## 3. 后续经评审授权后的允许范围
 

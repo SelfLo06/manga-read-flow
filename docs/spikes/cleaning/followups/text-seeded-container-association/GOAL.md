@@ -181,5 +181,5 @@ GO_TO_PIXEL_TEXT_MASK_SPIKE
 2. R0 禁止宣称 pixel-accurate segmentation、精确 boundary F1、双人边界一致性或已冻结 uncertainty-band 数值；
 3. S1 已冻结为新的六例统一 blind run `20260715T075811Z-3e9711`；历史 base chain 只保留为证据，不与新结果拼接；
 4. Goal 2 已实现最小 scorer，并仅用 `cal-01/cal-02` 冻结 `T_different=0.40`、`T_same=0.75`；Goal 3 只读且不得根据 R0 回调；
-5. P2 的实际收益仍须在 P1 uncertain subset 上验证；
+5. Goal 3 verdict 为 `FURTHER_SPIKE`：P1 topology 2/3、无 false-low-risk，但未优于 B1，且存在 false split 与大面积背景传播；当前不得进入 Pixel Text Mask；
 6. R1 最低 37 region 已由维护者从当前最小技术 Spike 延后，不是本轮 GO/FURTHER/NO-GO 的前置条件。

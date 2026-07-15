@@ -209,6 +209,10 @@ empirical margin     = 0.42618291751598514
 
 完整 feature、pair、hash、sanity 输出和限制见 `GOAL2-HARNESS-CALIBRATION-v0.1.md`。该 lock 只供 Goal 3 的冻结 R0 轻量矩阵读取；R0 不得用于回调阈值。
 
+### 7.3 Goal 3 R0 result
+
+Goal 3 已按冻结输入和阈值完成一次 `6 × B0/B1/P1` 轻量矩阵：三种方法 safety decision 均为 6/6、false-low-risk 均为 0；P1 topology 为 2/3，与 B0/B1 相同，且相对 A coarse reference 未证明优于 B1。Gate verdict 为 `FURTHER_SPIKE`，当前不得进入 Pixel Text Mask。详见 `GOAL3-R0-VALIDATION-REPORT-v0.1.md` 与 `GOAL3-GATE-v0.1.md`。
+
 ## 8. 指标定义
 
 ### 8.1 Grouping
