@@ -45,7 +45,7 @@ grouping / container association 方法
 | R0-not-text | not-text 误 seed | `_033.jpg` ROI `[620,0,560,430]` | `SKIP`；不得产生低风险 support。 |
 | R0-textured-decorative-risk | 复杂背景装饰文字 | `01.png` ROI `[0,0,2263,1200]` | 只验证高风险负例与 abstention，不代表普通对话气泡。 |
 
-source/crop hashes 与选择证据见 `R0-SELECTION-v0.3.md`；分层证据裁决见 `R0-ADJUDICATION-v0.3.md`。A/B 选择题已冻结 semantic labels 与 container topology，A overlay 已冻结为 coarse target-region reference。pixel-accurate boundary/support GT 与双人边界一致性不可用。
+source/crop hashes 与选择证据见 [`../r0/R0-SELECTION-v0.3.md`](../r0/R0-SELECTION-v0.3.md)；分层证据裁决见 [`../r0/R0-ADJUDICATION-v0.3.md`](../r0/R0-ADJUDICATION-v0.3.md)。A/B 选择题已冻结 semantic labels 与 container topology，A overlay 已冻结为 coarse target-region reference。pixel-accurate boundary/support GT 与双人边界一致性不可用。
 
 ### 3.2 Boundary uncertainty
 
@@ -182,7 +182,7 @@ Detector:      PP-OCRv6_medium_det
 Grouping:      orientation=1.25 / overlap=0.15 / relative-gap=0.35 / min-gap=16
 ```
 
-六例均有可追踪 fragments/groups，输入 hash 运行前后一致。完整 provenance、覆盖和 calibration 隔离见 `S1-INPUT-FREEZE-v0.1.md`。
+六例均有可追踪 fragments/groups，输入 hash 运行前后一致。完整 provenance、覆盖和 calibration 隔离见 [`../goal1-s1-input-freeze/S1-INPUT-FREEZE-v0.1.md`](../goal1-s1-input-freeze/S1-INPUT-FREEZE-v0.1.md)。
 
 ### 7.2 P_same_container calibration-only 规则
 
@@ -207,11 +207,11 @@ selected T_same      = 0.75
 empirical margin     = 0.42618291751598514
 ```
 
-完整 feature、pair、hash、sanity 输出和限制见 `GOAL2-HARNESS-CALIBRATION-v0.1.md`。该 lock 只供 Goal 3 的冻结 R0 轻量矩阵读取；R0 不得用于回调阈值。
+完整 feature、pair、hash、sanity 输出和限制见 [`../goal2-harness-calibration/GOAL2-HARNESS-CALIBRATION-v0.1.md`](../goal2-harness-calibration/GOAL2-HARNESS-CALIBRATION-v0.1.md)。该 lock 只供 Goal 3 的冻结 R0 轻量矩阵读取；R0 不得用于回调阈值。
 
 ### 7.3 Goal 3 R0 result
 
-Goal 3 已按冻结输入和阈值完成一次 `6 × B0/B1/P1` 轻量矩阵：三种方法 safety decision 均为 6/6、false-low-risk 均为 0；P1 topology 为 2/3，与 B0/B1 相同，且相对 A coarse reference 未证明优于 B1。Gate verdict 为 `FURTHER_SPIKE`，当前不得进入 Pixel Text Mask。详见 `GOAL3-R0-VALIDATION-REPORT-v0.1.md` 与 `GOAL3-GATE-v0.1.md`。
+Goal 3 已按冻结输入和阈值完成一次 `6 × B0/B1/P1` 轻量矩阵：三种方法 safety decision 均为 6/6、false-low-risk 均为 0；P1 topology 为 2/3，与 B0/B1 相同，且相对 A coarse reference 未证明优于 B1。Gate verdict 为 `FURTHER_SPIKE`，当前不得进入 Pixel Text Mask。详见 [`../goal3-r0-validation/GOAL3-R0-VALIDATION-REPORT-v0.1.md`](../goal3-r0-validation/GOAL3-R0-VALIDATION-REPORT-v0.1.md) 与 [`../goal3-r0-validation/GOAL3-GATE-v0.1.md`](../goal3-r0-validation/GOAL3-GATE-v0.1.md)。
 
 ## 8. 指标定义
 

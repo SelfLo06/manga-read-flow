@@ -165,7 +165,7 @@ GO_TO_PIXEL_TEXT_MASK_SPIKE
 
 ## 10. 当前实例决策与剩余开放项
 
-维护者已撤回 v0.2 的过早冻结；`FREEZE.md` 仅保留为历史记录。扩大候选筛选、A/B 独立选择题与 coordinator 裁决现已完成。v0.3 的 R0 source、ROI、crop identity、semantic labels 与 container topology 已冻结；Annotator A overlay 冻结为 coarse target-region reference。详见 `R0-SELECTION-v0.3.md` 与 `R0-ADJUDICATION-v0.3.md`。
+维护者已撤回 v0.2 的过早冻结；[`../r0/FREEZE.md`](../r0/FREEZE.md) 仅保留为历史记录。扩大候选筛选、A/B 独立选择题与 coordinator 裁决现已完成。v0.3 的 R0 source、ROI、crop identity、semantic labels 与 container topology 已冻结；Annotator A overlay 冻结为 coarse target-region reference。详见 [`../r0/R0-SELECTION-v0.3.md`](../r0/R0-SELECTION-v0.3.md) 与 [`../r0/R0-ADJUDICATION-v0.3.md`](../r0/R0-ADJUDICATION-v0.3.md)。
 
 下列事项仍未冻结：
 

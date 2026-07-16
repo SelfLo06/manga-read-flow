@@ -43,7 +43,7 @@ T_same      ∈ {0.70, 0.75, 0.80, 0.85, 0.90}
 minimum empirical same/different margin = 0.20
 ```
 
-选择规则为：先要求 calibration pair 的 false merge/split 均为零，再取最大 abstention gap；若无法形成安全 separation，则 `force_all_uncertain=true`。`FREEZE.md` 中的 v0.2 网格已经由其 reopening notice 明确退役，不用于本轮。
+选择规则为：先要求 calibration pair 的 false merge/split 均为零，再取最大 abstention gap；若无法形成安全 separation，则 `force_all_uncertain=true`。[`../r0/FREEZE.md`](../r0/FREEZE.md) 中的 v0.2 网格已经由其 reopening notice 明确退役，不用于本轮。
 
 ### 2.2 B0 / B1 / P1
 

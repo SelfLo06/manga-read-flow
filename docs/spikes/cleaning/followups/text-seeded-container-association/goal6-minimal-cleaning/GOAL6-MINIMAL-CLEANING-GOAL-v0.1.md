@@ -18,7 +18,7 @@ Goal 5 frozen spatial input
 
 ## Frozen intake
 
-只能读取 `GOAL5-GOAL6-INPUT-CONTRACT-v0.1.md` 指定的 Goal 5 evaluation output：
+只能读取 [`../goal5-routed-association/GOAL5-GOAL6-INPUT-CONTRACT-v0.1.md`](../goal5-routed-association/GOAL5-GOAL6-INPUT-CONTRACT-v0.1.md) 指定的 Goal 5 evaluation output：
 
 | Asset | Route | Goal 6 role |
 | --- | --- | --- |
@@ -53,7 +53,7 @@ cal-51～54 只可用于开发 smoke/calibration，不进入最终效果结论�
 ## 允许文件
 
 ```text
-docs/spikes/cleaning/followups/text-seeded-container-association/GOAL6-*.md
+docs/spikes/cleaning/followups/text-seeded-container-association/goal6-minimal-cleaning/GOAL6-*.md
 tools/spikes/text_seeded_container_association/goal6_*.py
 tests/unit/test_text_seeded_container_goal6_*.py
 data/local/text-seeded-container-association/goal6-minimal-cleaning-v0.1/**  # Git ignored

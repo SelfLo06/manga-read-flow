@@ -55,7 +55,7 @@ data/local/text-seeded-container-association/r0-final-blind-v0.3/
 | Inter-annotator boundary agreement | `UNAVAILABLE` |
 | Free-text exact min/max support envelope | `NOT_FROZEN`; 仅允许 coarse / 宽容差 reference |
 | GT uncertainty-band numerical value | `NOT_FROZEN` |
-| S1 coverage audit | `FROZEN`; final blind run `20260715T075811Z-3e9711` 覆盖 `6/6`，见 `S1-INPUT-FREEZE-v0.1.md` |
+| S1 coverage audit | `FROZEN`; final blind run `20260715T075811Z-3e9711` 覆盖 `6/6`，见 [`../goal1-s1-input-freeze/S1-INPUT-FREEZE-v0.1.md`](../goal1-s1-input-freeze/S1-INPUT-FREEZE-v0.1.md) |
 | Boundary margin numerical freeze | `REOPENED` |
 | Calibration/evaluation split | `REOPENED` |
 | `P_same_container` numerical thresholds | `PENDING`; scorer 不存在 |
