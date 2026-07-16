@@ -240,6 +240,11 @@ RealToolSpike总规划.md
 
 data/
 
+# Archived YOLO model-selection experiment inputs and outputs.
+data/local/yolo-model-selection/
+artifacts/yolo-model-selection/
+.tmp/yolo-model-selection/
+
 # Local-only dataset-audit derivative cache and debug visualizations
 artifacts/dataset-audit/
 .tmp/dataset-audit/
