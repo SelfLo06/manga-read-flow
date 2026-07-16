@@ -1,14 +1,14 @@
-# Execution Contract Design
+# Execution Contract 设计
 
-This directory contains Goal 2: Execution Contract Design.
+本目录包含 Goal 2：Execution Contract 设计。
 
-Scope:
-- Provider Adapter minimal contracts
-- ArtifactService minimal contracts
-- QualityCheckService / IssueType minimal contracts
-- StageExecutor boundary assumptions
+范围：
+- Provider Adapter 最小 contracts
+- ArtifactService 最小 contracts
+- QualityCheckService / IssueType 最小 contracts
+- StageExecutor 边界假设
 - FakeProvider single-Page readiness
 
-This is a design-documentation package only.
+本目录仅包含设计文档。
 
-No production code, SQL DDL, ORM mappings, migrations, API routes, frontend implementation, real provider integrations, or real translation prompt templates belong here.
+这里不应包含生产代码、SQL DDL、ORM mappings、migrations、API routes、前端实现、真实 provider integrations 或真实 translation prompt templates。

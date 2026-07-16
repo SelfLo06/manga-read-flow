@@ -1,14 +1,14 @@
-# Persistence Readiness Design
+# 持久化就绪性设计
 
-This directory contains Goal 3: Persistence Readiness Design.
+本目录包含 Goal 3：持久化就绪性设计。
 
-Scope:
-- Minimal repository / DAO design readiness
+范围：
+- 最小 repository / DAO 设计就绪性
 - app.db / project.db migration strategy
-- Unit of Work / transaction boundary guidance
-- Minimal persistence support for FakeProvider single-Page backend vertical slice
-- Recovery, idempotency, active pointer, artifact, issue, attempt, and decision persistence readiness
+- Unit of Work / transaction boundary 指导
+- FakeProvider single-Page backend vertical slice 的最小持久化支持
+- Recovery、idempotency、active pointer、artifact、issue、attempt 和 decision 持久化就绪性
 
-This is a design-documentation package only.
+本目录仅包含设计文档。
 
-No production code, SQL DDL, SQLAlchemy models, Alembic migrations, FastAPI routes, frontend implementation, real provider integrations, or real translation prompt templates belong here.
+这里不应包含生产代码、SQL DDL、SQLAlchemy models、Alembic migrations、FastAPI routes、前端实现、真实 provider integrations 或真实 translation prompt templates。

@@ -1,32 +1,32 @@
-# Slice 07: Idempotency and Recovery
+# Slice 07：Idempotency and Recovery
 
-## 1. Objective
+## 1. 目标
 
-Plan the first idempotent rerun and crash recovery validations for the MVP-0 FakeProvider single-Page backend slice.
+规划 MVP-0 FakeProvider single-Page backend slice 的第一批幂等重跑与崩溃恢复验证。
 
-This slice proves the workflow can reuse unchanged OCR/translation/cleaned/typeset outputs, recover after selected crashes, handle official-but-unselected artifacts, and respond to missing active artifacts without relying only on Page.status or timestamps.
+本 slice 证明 workflow 可以复用未变化的 OCR / translation / cleaned / typeset outputs，在选定 crash 后恢复，处理 official-but-unselected artifacts，并在不只依赖 Page.status 或 timestamps 的情况下响应 missing active artifacts。
 
-## 2. Why this slice comes now
+## 2. 为什么现在做这个 slice
 
-Happy path and quality paths create the durable evidence recovery needs. The last MVP-0 backend planning slice verifies that the evidence is sufficient after reruns and crashes, before any real provider or UI makes failures costlier.
+Happy path 和 quality paths 已经创建 recovery 需要的 durable evidence。最后一个 MVP-0 后端规划 slice 会在接入任何真实 provider 或 UI 之前，验证这些 evidence 在 reruns 和 crashes 后是否足够，因为真实依赖会让 failures 代价更高。
 
-Decisions:
+决策：
 
-- Idempotency is a WorkflowLoopEngine/repository decision, not a Provider Adapter decision.
-- Reuse is auditable through `WorkflowAttempt.status = reused_cached` and/or `WorkflowDecision.decision_type = reuse_cached_result`.
-- Recovery prefers committed results, active pointers, artifact metadata, decisions, attempts, and dependency hashes.
-- Official unselected artifacts are evidence/reuse candidates only and are never selected by latest timestamp.
-- ArtifactService marks missing/hash-invalid artifacts; WorkflowLoopEngine decides rebuild, warning, pause, or block.
+- Idempotency 是 WorkflowLoopEngine / repository decision，不是 Provider Adapter decision。
+- Reuse 通过 `WorkflowAttempt.status = reused_cached` 和 / 或 `WorkflowDecision.decision_type = reuse_cached_result` 可审计。
+- Recovery 优先使用 committed results、active pointers、artifact metadata、decisions、attempts 和 dependency hashes。
+- Official unselected artifacts 只是 evidence / reuse candidates，绝不按 latest timestamp 选择。
+- ArtifactService 标记 missing / hash-invalid artifacts；WorkflowLoopEngine 决定 rebuild、warning、pause 或 block。
 
-Rejected alternatives:
+被拒绝的备选方案：
 
-- Rerunning providers on every unchanged Page.
-- Inferring recovery success from Page.status.
-- Promoting latest artifact/result by timestamp.
-- Parsing raw provider temp output into accepted results during recovery without normal validation/acceptance replay.
-- Letting ArtifactService decide workflow outcome after missing file detection.
+- 每次 unchanged Page 都重新运行 providers。
+- 从 Page.status 推断 recovery success。
+- 按 timestamp promote latest artifact / result。
+- 在 recovery 中不经过正常 validation / acceptance replay，就把 raw provider temp output 解析成 accepted results。
+- 让 ArtifactService 在 missing file detection 后决定 workflow outcome。
 
-## 3. Inputs from prior designs
+## 3. 来自先前设计的输入
 
 - `docs/design/workflow-state/final/recovery-rules.md`
 - `docs/design/workflow-state/final/stale-propagation-rules.md`
@@ -39,87 +39,87 @@ Rejected alternatives:
 - `docs/implementation/mvp0-fakeprovider-slice/HARNESS.md`
 - `docs/implementation/mvp0-fakeprovider-slice/PLAN.md`
 
-## 4. Allowed files or directories to change during implementation
+## 4. 实现期间允许修改的文件或目录
 
-For the future implementation task only:
+仅适用于未来实现任务：
 
 - `src/manga_read_flow/workflow/**`
-- `src/manga_read_flow/recovery/**` if a separate recovery module is created.
-- `src/manga_read_flow/persistence/**` for recovery snapshots, reuse lookups, task claim/repair, and guarded acceptance.
-- `src/manga_read_flow/artifacts/**` for missing/hash validation state updates.
+- 如创建单独 recovery module，则可修改 `src/manga_read_flow/recovery/**`。
+- `src/manga_read_flow/persistence/**`，用于 recovery snapshots、reuse lookups、task claim / repair 和 guarded acceptance。
+- `src/manga_read_flow/artifacts/**`，用于 missing / hash validation state updates。
 - `src/manga_read_flow/domain/**`
-- `src/manga_read_flow/providers/**` only for FakeProvider call-count/test modes if needed.
+- `src/manga_read_flow/providers/**`，仅用于 FakeProvider call-count / test modes。
 - `tests/integration/test_idempotency_and_recovery.py`
 - `tests/fixtures/**`
 
-## 5. Forbidden changes
+## 5. 禁止变更
 
-- Real provider integrations or prompt templates.
-- Batch-scale workflow broadening.
-- UI/API/frontend routes.
-- Export output, ZIP, manifest, or `ExportRecord`.
-- Timestamp-selected active outputs.
-- Page.status-only recovery logic.
-- ArtifactService retry/fallback/warning/block/readiness decisions.
-- Provider Adapter cache decisions.
+- 真实 provider integrations 或 prompt templates。
+- Batch-scale workflow broadening。
+- UI / API / frontend routes。
+- Export output、ZIP、manifest 或 `ExportRecord`。
+- Timestamp-selected active outputs。
+- Page.status-only recovery logic。
+- ArtifactService retry / fallback / warning / block / readiness decisions。
+- Provider Adapter cache decisions。
 
-## 6. Implementation tasks
+## 6. 实现任务
 
-1. Inspect branch and `git status --short`; stop if unrelated changes exist.
-2. Add repository reuse lookups for OCR, translation, cleaned artifacts, and typeset artifacts using dependency keys and artifact validation.
-3. Add auditable reuse decision/attempt persistence.
-4. Add rerun unchanged Page integration test proving no duplicate provider calls and no duplicate active result rows.
-5. Add crash simulation after OCR acceptance; recovery resumes from translation without OCR rerun.
-6. Add crash simulation after artifact registration before acceptance; official unselected artifact remains unselected and is not chosen by timestamp.
-7. Add missing active artifact scenario; ArtifactService marks `storage_state = missing`.
-8. Add WorkflowLoopEngine recovery decisions for rebuild, warning, pause, or block based on evidence and policy.
-9. Add recovery repair tests that use tasks, attempts, decisions, active pointers, dependency hashes, artifacts, issues, and TextBlock statuses, not Page.status alone.
+1. 检查 branch 和 `git status --short`；如果存在 unrelated changes，停止。
+2. 使用 dependency keys 和 artifact validation，为 OCR、translation、cleaned artifacts 和 typeset artifacts 添加 repository reuse lookups。
+3. 添加可审计 reuse decision / attempt persistence。
+4. 添加 rerun unchanged Page integration test，证明没有重复 provider calls，也没有重复 active result rows。
+5. 添加 OCR acceptance 后 crash simulation；recovery 从 translation 继续且不重跑 OCR。
+6. 添加 artifact registration 后、acceptance 前 crash simulation；official unselected artifact 保持 unselected，且不会按 timestamp 选择。
+7. 添加 missing active artifact 场景；ArtifactService 标记 `storage_state = missing`。
+8. 根据 evidence 和 policy 添加 WorkflowLoopEngine recovery decisions：rebuild、warning、pause 或 block。
+9. 添加 recovery repair tests，使用 tasks、attempts、decisions、active pointers、dependency hashes、artifacts、issues 和 TextBlock statuses，而不是只用 Page.status。
 
-## 7. Validation command or test target
+## 7. 验证命令或测试目标
 
 ```bash
 pytest tests/integration/test_idempotency_and_recovery.py
 ```
 
-## 8. Acceptance criteria
+## 8. 验收标准
 
-- Unchanged rerun avoids duplicate provider calls for reusable OCR, translation, cleaning, and typesetting outputs.
-- Reuse is auditable through attempt or decision evidence.
-- No duplicate active result rows are created.
-- Crash after OCR acceptance resumes at translation without OCR rerun.
-- Registered-but-unselected artifact is not selected by latest timestamp.
-- Missing active artifact becomes `storage_state = missing`.
-- WorkflowLoopEngine decides rebuild/warning/pause/block after missing artifact evidence.
-- Recovery does not rely only on Page.status.
+- Unchanged rerun 避免对可复用 OCR、translation、cleaning 和 typesetting outputs 进行重复 provider calls。
+- Reuse 通过 attempt 或 decision evidence 可审计。
+- 不创建重复 active result rows。
+- OCR acceptance 后 crash 可以从 translation 继续，且不重跑 OCR。
+- Registered-but-unselected artifact 不会按 latest timestamp 被选中。
+- Missing active artifact 变为 `storage_state = missing`。
+- WorkflowLoopEngine 在 missing artifact evidence 后决定 rebuild / warning / pause / block。
+- Recovery 不只依赖 Page.status。
 
-## 9. Failure cases to test
+## 9. 需要测试的失败场景
 
-- Rerun after unchanged Page with compatible dependency hashes.
-- Rerun after dependency hash change should not reuse stale result.
-- Crash after OCRResult and active OCR pointer committed.
-- Crash after typeset artifact registration before active pointer acceptance.
-- Missing active cleaned or typeset artifact.
-- Open blocking issue during recovery prevents pure readiness.
-- Locked translation is not replaced by reuse without explicit override.
+- Compatible dependency hashes 下，unchanged Page rerun。
+- Dependency hash 变化后 rerun 不应复用 stale result。
+- OCRResult 和 active OCR pointer committed 后 crash。
+- Typeset artifact registration 后、active pointer acceptance 前 crash。
+- Missing active cleaned 或 typeset artifact。
+- Recovery 期间存在 open blocking issue，阻止 pure readiness。
+- Locked translation 没有 explicit override 时，不会被 reuse 替换。
 
-## 10. Commit strategy
+## 10. Commit 策略
 
-Use one focused implementation commit after `pytest tests/integration/test_idempotency_and_recovery.py` passes, if commits are explicitly allowed. Stage only workflow/recovery, persistence, artifact, FakeProvider test support, fixture, and test files for this slice.
+如果明确允许 commits，则在 `pytest tests/integration/test_idempotency_and_recovery.py` 通过后做一个聚焦实现 commit。只 stage 本 slice 的 workflow / recovery、persistence、artifact、FakeProvider test support、fixture 和 test files。
 
-## 11. Risks and scope traps
+## 11. 风险与范围陷阱
 
-- Expanding into full batch recovery instead of one Page.
-- Treating failed/refused attempts as reusable successes.
-- Over-reusing stale results because dependency keys are too small.
-- Under-reusing valid results because artifact validation is missing.
-- Promoting temp/orphan files without normal ArtifactService registration and acceptance.
-- Adding cleanup scheduler or export records to explain missing artifacts.
+- 扩展到 full batch recovery，而不是一个 Page。
+- 将 failed / refused attempts 当作 reusable successes。
+- 因 dependency keys 太小而过度复用 stale results。
+- 因缺少 artifact validation 而复用不足。
+- 未经正常 ArtifactService registration 和 acceptance 就 promote temp / orphan files。
+- 添加 cleanup scheduler 或 export records 来解释 missing artifacts。
 
-## 12. Codex implementation prompt
+## 12. Codex 实现 prompt
 
 ```text
 Goal:
-Implement Slice 07, idempotency and crash recovery validation for the MVP-0 single-Page FakeProvider backend slice.
+实现 Slice 07，即 MVP-0 single-Page FakeProvider backend slice 的 idempotency 和 crash recovery validation。
 
 Source documents:
 - AGENTS.md

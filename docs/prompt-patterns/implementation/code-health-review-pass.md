@@ -1,32 +1,32 @@
 # Code Health Review Pass Prompt
 
-Version: v0.2  
-Status: Reusable implementation review prompt  
-Use after: A functional implementation slice has completed its focused validation attempt
+版本：v0.2
+状态：可复用实现评审 prompt
+使用时机：某个功能性 implementation slice 完成其聚焦验证尝试之后
 
 ---
 
-## 1. Purpose
+## 1. 目的
 
-Use this prompt to run a dedicated post-implementation code health review.
+使用本 prompt 运行一次专门的实现后 code health review。
 
-This review catches non-bug defects introduced by the current implementation slice, including architecture boundary drift, responsibility drift, excessive coupling, weak testability, large-file growth, and AI-generated code bloat.
+这次 review 捕获当前 implementation slice 引入的非 bug 类缺陷，包括架构边界漂移、职责漂移、过度耦合、可测试性薄弱、大文件膨胀，以及 AI 生成代码膨胀。
 
-This is not a feature implementation task.
+这不是功能实现任务。
 
-`docs/engineering/code-health-gate.md` is the source of truth for smell definitions, severity categories, allowed refactors, forbidden refactors, stop conditions, validation rules, and merge rules.
+`docs/engineering/code-health-gate.md` 是 smell 定义、severity categories、allowed refactors、forbidden refactors、stop conditions、validation rules 和 merge rules 的事实来源。
 
 ---
 
-## 2. Invocation Point
+## 2. 调用点
 
-Run this review after the implementation agent reports one of the following:
+在 implementation agent 报告以下任一情况后运行本 review：
 
-- the focused slice validation command passed;
-- the implementation is complete but validation failed for a stated reason;
-- the implementation stopped and needs a code-health-oriented review of the current diff.
+- 聚焦 slice validation command 已通过；
+- 实现已完成，但 validation 因明确原因失败；
+- 实现已停止，需要对当前 diff 做 code-health-oriented review。
 
-Preferred flow:
+推荐流程：
 
 ```text
 implementation slice
@@ -36,14 +36,14 @@ implementation slice
 -> rerun focused validation
 -> run full pytest unless concretely blocked
 -> final report / commit if authorized
-````
+```
 
 ---
 
 ## 3. Subagent Prompt
 
 ```text
-You are the Code Health Review subagent for this repository.
+你是本仓库的 Code Health Review subagent。
 
 Goal:
 Review the current implementation slice diff for non-bug code health defects.
@@ -163,9 +163,9 @@ Do not claim success if validation was not run and no accepted reason is provide
 
 ---
 
-## 4. Required Tail Section for Every Implementation Prompt
+## 4. 每个实现 prompt 必附的尾部段落
 
-Append this shorter tail section to future implementation slice prompts.
+把下面较短的尾部段落附加到未来 implementation slice prompts。
 
 ```text
 Post-implementation Code Health Review:
@@ -191,9 +191,9 @@ The slice is not ready for commit until no Category A blocker remains.
 
 ---
 
-## 5. Manual Short Invocation
+## 5. 手动短调用
 
-Use this when triggering the review manually.
+手动触发 review 时使用：
 
 ```text
 Run a Code Health Review Pass on the current implementation slice diff.
@@ -215,14 +215,14 @@ Report smells found, fixed, deferred, validation results, Category A blockers, a
 
 ---
 
-## 6. Integration Rule
+## 6. 集成规则
 
-A slice is not ready for commit until:
+某个 slice 在满足以下条件前，不可视为 ready for commit：
 
-* focused validation has completed;
-* Code Health Review Pass has completed;
-* no Category A blocker remains;
-* no architecture boundary violation remains;
-* no forbidden files changed;
-* any deferred smell is explicitly reported;
-* commit is authorized.
+* focused validation 已完成；
+* Code Health Review Pass 已完成；
+* 没有 Category A blocker 剩余；
+* 没有 architecture boundary violation 剩余；
+* 没有 forbidden files 被修改；
+* 任何 deferred smell 都已明确报告；
+* commit 已被授权。

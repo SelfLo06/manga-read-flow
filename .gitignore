@@ -217,10 +217,19 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
+# Repository-local process artifacts
+log/
+docs/design/*/PLAN.md
+docs/design/*/DECISION_LOG.md
+docs/design/*/open-questions.md
+docs/design/*/proposals/
+docs/design/*/reviews/
+docs/implementation/*/PLAN.md
+docs/implementation/*/reviews/
+
 #codex
 .codex
 AGENTS.md
-
 # Local sample images
 local_samples/
 

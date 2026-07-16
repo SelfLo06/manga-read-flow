@@ -1,113 +1,113 @@
-# Slice 03: ArtifactService and Import
+# Slice 03：ArtifactService and Import
 
-## 1. Objective
+## 1. 目标
 
-Plan original image import and official artifact registration for one Page.
+规划单个 Page 的 original image import 和 official artifact registration。
 
-This slice proves the filesystem/artifact metadata boundary: original bytes live in the Project workspace, SQLite stores only metadata, and Page import state is valid only when the original artifact pointer commits with Batch/Page rows.
+本 slice 证明 filesystem / artifact metadata 边界：original bytes 位于 Project workspace，SQLite 只保存 metadata，并且只有当 original artifact pointer 与 Batch / Page rows 一起 commit 时，Page import state 才有效。
 
-## 2. Why this slice comes now
+## 2. 为什么现在做这个 slice
 
-After Project store and repository/UoW boundaries exist, the system can safely register official artifacts and create Page import state. FakeProvider stages need an original artifact as durable input, and recovery needs artifact metadata before any workflow processing starts.
+Project store 和 repository / UoW 边界就绪后，系统可以安全登记 official artifacts 并创建 Page import state。FakeProvider stages 需要 original artifact 作为 durable input，recovery 也需要在任何 workflow processing 开始前拥有 artifact metadata。
 
-Decisions:
+决策：
 
-- Implement import as an ApplicationService/import use case for MVP-0, not a WorkflowLoopEngine stage.
-- ArtifactService is the only official artifact lifecycle entry.
-- Store artifact paths project-relative.
-- Original images are permanent originals and are never overwritten.
-- Import acceptance commits Page original pointer and content state through repository/UoW.
+- MVP-0 中 import 实现为 ApplicationService / import use case，而不是 WorkflowLoopEngine stage。
+- ArtifactService 是唯一 official artifact lifecycle 入口。
+- Artifact paths 使用 project-relative。
+- Original images 是 permanent originals，永不覆盖。
+- Import acceptance 通过 repository / UoW 提交 Page original pointer 和 content state。
 
-Rejected alternatives:
+被拒绝的备选方案：
 
-- Provider or workflow code directly writing official workspace paths.
-- Page rows storing authoritative file paths instead of artifact ids.
-- Storing original image bytes in SQLite.
-- Treating an imported Page as complete before original artifact metadata and pointer commit together.
+- Provider 或 workflow code 直接写 official workspace paths。
+- Page rows 存 authoritative file paths，而不是 artifact ids。
+- 将 original image bytes 存入 SQLite。
+- 在 original artifact metadata 和 pointer 一起 commit 前，就把 Page 视为 imported。
 
-## 3. Inputs from prior designs
+## 3. 来自先前设计的输入
 
-- `docs/design/data-model/final/data-model-dd-v0.1.md`: ProcessingArtifact metadata, Page original pointer, artifact states.
+- `docs/design/data-model/final/data-model-dd-v0.1.md`：ProcessingArtifact metadata、Page original pointer、artifact states。
 - `docs/design/execution-contract/final/artifact-service-contract.md`
 - `docs/design/execution-contract/final/execution-contract-dd-v0.1.md`
-- `docs/design/persistence/final/unit-of-work-and-transactions.md`: import transaction.
-- `docs/design/persistence/final/fakeprovider-persistence-readiness.md`: mandatory original artifact.
+- `docs/design/persistence/final/unit-of-work-and-transactions.md`：import transaction。
+- `docs/design/persistence/final/fakeprovider-persistence-readiness.md`：mandatory original artifact。
 - `docs/implementation/mvp0-fakeprovider-slice/HARNESS.md`
 - `docs/implementation/mvp0-fakeprovider-slice/PLAN.md`
 
-## 4. Allowed files or directories to change during implementation
+## 4. 实现期间允许修改的文件或目录
 
-For the future implementation task only:
+仅适用于未来实现任务：
 
 - `src/manga_read_flow/artifacts/**`
-- `src/manga_read_flow/application/**` for import use case only.
-- `src/manga_read_flow/persistence/**` for artifact metadata and content state repository operations needed by import.
-- `src/manga_read_flow/domain/**` for artifact/page DTOs.
+- `src/manga_read_flow/application/**`，仅用于 import use case。
+- `src/manga_read_flow/persistence/**`，用于 import 所需 artifact metadata 和 content state repository operations。
+- `src/manga_read_flow/domain/**`，用于 artifact / page DTOs。
 - `tests/integration/test_import_and_artifactservice.py`
-- `tests/fixtures/**` for a tiny fake image fixture.
+- `tests/fixtures/**`，用于 tiny fake image fixture。
 
-## 5. Forbidden changes
+## 5. 禁止变更
 
-- WorkflowLoopEngine stage implementation.
-- Provider adapters writing official artifacts.
-- Export artifacts, ZIP, manifest, or `ExportRecord`.
-- Image BLOB storage in SQLite.
-- Overwriting original files.
-- Cleanup scheduler or full retention policy beyond minimal states needed by import/missing detection.
-- UI/API upload routes.
-- Real provider integrations.
+- WorkflowLoopEngine stage implementation。
+- Provider adapters writing official artifacts。
+- Export artifacts、ZIP、manifest 或 `ExportRecord`。
+- SQLite 中的 image BLOB storage。
+- 覆盖 original files。
+- 超出 import / missing detection 最小状态的 cleanup scheduler 或完整 retention policy。
+- UI / API upload routes。
+- 真实 provider integrations。
 
-## 6. Implementation tasks
+## 6. 实现任务
 
-1. Inspect branch and `git status --short`; stop if unrelated changes exist.
-2. Add ArtifactService path boundary checks that prevent path traversal and keep files under Project workspace.
-3. Add original artifact registration with project-relative path, hash, byte size, MIME/type metadata, dimensions if practical, retention class, and safety flags.
-4. Add an import use case that validates a local image fixture, calls ArtifactService, and commits Batch/Page import state with `Page.original_artifact_id`.
-5. Add missing/corrupt artifact detection support as metadata state update or service report needed by later recovery.
-6. Add tests proving bytes stay on filesystem and SQLite stores metadata only.
-7. Add tests proving original artifact is not overwritten on rerun or duplicate filename import.
+1. 检查 branch 和 `git status --short`；如果存在 unrelated changes，停止。
+2. 添加 ArtifactService path boundary checks，防止 path traversal，并确保 files 位于 Project workspace 下。
+3. 添加 original artifact registration，包含 project-relative path、hash、byte size、MIME / type metadata、可行时的 dimensions、retention class 和 safety flags。
+4. 添加 import use case：校验本地 image fixture、调用 ArtifactService，并提交 Batch / Page import state 与 `Page.original_artifact_id`。
+5. 添加 missing / corrupt artifact detection 支持，作为后续 recovery 所需的 metadata state update 或 service report。
+6. 添加测试，证明 bytes 保留在 filesystem，SQLite 只保存 metadata。
+7. 添加测试，证明 rerun 或 duplicate filename import 不会覆盖 original artifact。
 
-## 7. Validation command or test target
+## 7. 验证命令或测试目标
 
 ```bash
 pytest tests/integration/test_import_and_artifactservice.py
 ```
 
-## 8. Acceptance criteria
+## 8. 验收标准
 
-- Original image is copied or stored into the Project workspace through ArtifactService.
-- `processing_artifacts` metadata is persisted with project-relative path, hash, size, type, retention, and `storage_state = present`.
-- Page points to `original_artifact_id`.
-- Original image bytes remain on filesystem and are not stored in SQLite.
-- Original image is never overwritten; duplicate names are made safe by deterministic or unique path handling.
-- Deleting or corrupting an artifact can be detected later as missing/hash mismatch without WorkflowLoopEngine deciding the outcome.
+- Original image 通过 ArtifactService 被复制或存储到 Project workspace。
+- `processing_artifacts` metadata 持久化 project-relative path、hash、size、type、retention 和 `storage_state = present`。
+- Page 指向 `original_artifact_id`。
+- Original image bytes 保留在 filesystem，不存入 SQLite。
+- Original image 永不覆盖；duplicate names 通过 deterministic 或 unique path handling 变安全。
+- 删除或损坏 artifact 后，可以在后续检测为 missing / hash mismatch，且不由 WorkflowLoopEngine 决定 outcome。
 
-## 9. Failure cases to test
+## 9. 需要测试的失败场景
 
-- Import path traversal attempt.
-- Unsupported file extension or MIME/type.
-- Duplicate original filename in the same Project.
-- Original artifact file deleted after registration.
-- Hash mismatch after file corruption.
-- Import transaction fails after artifact registration; artifact remains official but Page is not treated as imported until pointer commit.
+- Import path traversal attempt。
+- Unsupported file extension 或 MIME / type。
+- 同一 Project 中 duplicate original filename。
+- Original artifact file 在 registration 后被删除。
+- 文件损坏后的 hash mismatch。
+- Artifact registration 后 import transaction 失败；artifact 保持 official，但 Page 在 pointer commit 前不视为 imported。
 
-## 10. Commit strategy
+## 10. Commit 策略
 
-Use one focused implementation commit after `pytest tests/integration/test_import_and_artifactservice.py` passes, if commits are explicitly allowed. Stage only ArtifactService, import use case, repository additions, fixtures, and tests for this slice.
+如果明确允许 commits，则在 `pytest tests/integration/test_import_and_artifactservice.py` 通过后做一个聚焦实现 commit。只 stage 本 slice 的 ArtifactService、import use case、repository additions、fixtures 和 tests。
 
-## 11. Risks and scope traps
+## 11. 风险与范围陷阱
 
-- Building full upload/API behavior instead of a backend import use case.
-- Implementing export output while adding artifact paths.
-- Letting ArtifactService decide workflow rebuild, warning, pause, or block on missing files. It should report artifact state only.
-- Using absolute paths as domain truth. Use project-relative artifact paths in metadata.
-- Adding cleanup scheduler complexity before active outputs exist.
+- 构建完整 upload / API behavior，而不是 backend import use case。
+- 添加 artifact paths 时顺手实现 export output。
+- 让 ArtifactService 对 missing files 决定 workflow rebuild、warning、pause 或 block。它只应报告 artifact state。
+- 使用 absolute paths 作为 domain truth。metadata 中使用 project-relative artifact paths。
+- 在 active outputs 存在前添加 cleanup scheduler complexity。
 
-## 12. Codex implementation prompt
+## 12. Codex 实现 prompt
 
 ```text
 Goal:
-Implement Slice 03, ArtifactService original registration and one-Page import for MVP-0.
+实现 Slice 03，即 MVP-0 的 ArtifactService original registration 和 one-Page import。
 
 Source documents:
 - AGENTS.md

@@ -1,31 +1,31 @@
-# Slice 05: WorkflowLoop Happy Path
+# Slice 05：WorkflowLoop Happy Path
 
-## 1. Objective
+## 1. 目标
 
-Plan the first full single-Page happy path from imported Page to `ready_for_export` using deterministic FakeProvider evidence.
+规划第一个完整单 Page happy path：使用 deterministic FakeProvider evidence，从 imported Page 推进到 `ready_for_export`。
 
-This slice introduces WorkflowLoopEngine orchestration, acceptance transactions, active pointer updates, and export readiness checks without implementing actual export output.
+本 slice 引入 WorkflowLoopEngine orchestration、acceptance transactions、active pointer updates 和 export readiness checks，但不实现实际 export output。
 
-## 2. Why this slice comes now
+## 2. 为什么现在做这个 slice
 
-The lower boundaries now exist: Project store, repositories/UoW, ArtifactService import, FakeProvider, and StageExecutor. The system can now validate the core end-to-end state transition that proves the architecture hangs together for one Project, one Batch, and one Page.
+底层边界已经存在：Project store、repositories / UoW、ArtifactService import、FakeProvider 和 StageExecutor。系统现在可以验证核心端到端状态转移，证明架构能串起一个 Project、一个 Batch 和一个 Page。
 
-Decisions:
+决策：
 
-- WorkflowLoopEngine owns stage decisions and acceptance.
-- Acceptance transaction is the only boundary that selects active OCR, translation, cleaned, and typeset outputs.
-- `export_check` is in scope; actual export output is out of scope.
-- ProcessingProfileSnapshot is bootstrapped deterministically for FakeProvider and contains no secrets.
-- WorkflowAttempt, ToolRunLog, WorkflowDecision, ProcessingArtifact, and profile snapshot evidence must be inspectable in tests.
+- WorkflowLoopEngine 拥有 stage decisions 和 acceptance。
+- Acceptance transaction 是唯一选择 active OCR、translation、cleaned 和 typeset outputs 的边界。
+- `export_check` 在 scope 内；实际 export output 在 scope 外。
+- ProcessingProfileSnapshot 为 FakeProvider deterministic bootstrap，且不包含 secrets。
+- WorkflowAttempt、ToolRunLog、WorkflowDecision、ProcessingArtifact 和 profile snapshot evidence 必须可在 tests 中检查。
 
-Rejected alternatives:
+被拒绝的备选方案：
 
-- Updating active pointers in StageExecutor.
-- Selecting latest result/artifact by timestamp.
-- Treating Page.status as the source of recovery truth.
-- Creating an ExportRecord or export artifact to prove readiness.
+- 在 StageExecutor 中更新 active pointers。
+- 按 timestamp 选择 latest result / artifact。
+- 将 Page.status 当作 recovery truth 的来源。
+- 创建 ExportRecord 或 export artifact 来证明 readiness。
 
-## 3. Inputs from prior designs
+## 3. 来自先前设计的输入
 
 - `docs/design/workflow-state/final/workflow-state-dd-v0.1.md`
 - `docs/design/workflow-state/final/state-vocabulary.md`
@@ -38,87 +38,87 @@ Rejected alternatives:
 - `docs/implementation/mvp0-fakeprovider-slice/HARNESS.md`
 - `docs/implementation/mvp0-fakeprovider-slice/PLAN.md`
 
-## 4. Allowed files or directories to change during implementation
+## 4. 实现期间允许修改的文件或目录
 
-For the future implementation task only:
+仅适用于未来实现任务：
 
 - `src/manga_read_flow/workflow/**`
-- `src/manga_read_flow/application/**` for task start/run use case only.
-- `src/manga_read_flow/persistence/**` for acceptance, readiness, workflow, result, content, glossary, and artifact metadata operations.
+- `src/manga_read_flow/application/**`，仅用于 task start / run use case。
+- `src/manga_read_flow/persistence/**`，用于 acceptance、readiness、workflow、result、content、glossary 和 artifact metadata operations。
 - `src/manga_read_flow/domain/**`
-- `src/manga_read_flow/providers/**` only to use existing FakeProvider modes, not to add real providers.
-- `src/manga_read_flow/artifacts/**` only for artifact validation/registration calls already required by stages.
+- `src/manga_read_flow/providers/**`，仅使用既有 FakeProvider modes，不添加真实 providers。
+- `src/manga_read_flow/artifacts/**`，仅用于 stages 已要求的 artifact validation / registration calls。
 - `tests/integration/test_workflow_happy_path.py`
 - `tests/fixtures/**`
 
-## 5. Forbidden changes
+## 5. 禁止变更
 
-- Actual export output, ZIP, manifest artifact, or `ExportRecord`.
-- FastAPI routes, frontend UI, or Web UI behavior.
-- Real providers or real prompt templates.
-- Quality issue-heavy paths beyond minimal no-blocker happy path.
-- Idempotency/recovery breadth beyond the happy-path reuse hooks needed later.
-- Direct SQL or ORM session access from WorkflowLoopEngine.
+- 实际 export output、ZIP、manifest artifact 或 `ExportRecord`。
+- FastAPI routes、frontend UI 或 Web UI behavior。
+- 真实 providers 或真实 prompt templates。
+- 超出最小 no-blocker happy path 的 quality issue-heavy paths。
+- 超出后续需要的 happy-path reuse hooks 的 idempotency / recovery breadth。
+- WorkflowLoopEngine 直接访问 SQL 或 ORM session。
 
-## 6. Implementation tasks
+## 6. 实现任务
 
-1. Inspect branch and `git status --short`; stop if unrelated changes exist.
-2. Add ProcessingTask creation and deterministic ProcessingProfileSnapshot bootstrap for a single imported Page.
-3. Implement WorkflowLoopEngine happy-path stage progression:
-   - detection;
-   - OCR;
-   - translation;
-   - translation_check as no-blocker pass for the fake happy path;
-   - cleaning;
-   - typesetting;
-   - export_check.
-4. Use StageExecutor for provider/tool evidence and ArtifactService for official artifact registration.
-5. Implement acceptance transactions that create TextBlocks, OCRResults, TranslationResults, active OCR/translation pointers, cleaned/typeset artifact pointers, WorkflowDecisions, retry budget/task progress, and stage statuses together.
-6. Ensure active pointers are selected by acceptance only, never by latest timestamp.
-7. Implement readiness query for no open blocking issues plus present/hash-valid active typeset artifact.
-8. Add a happy-path integration test from Project/Page import to `ready_for_export`.
+1. 检查 branch 和 `git status --short`；如果存在 unrelated changes，停止。
+2. 为单个 imported Page 添加 ProcessingTask creation 和 deterministic ProcessingProfileSnapshot bootstrap。
+3. 实现 WorkflowLoopEngine happy-path stage progression：
+   - detection；
+   - OCR；
+   - translation；
+   - translation_check，在 fake happy path 中作为 no-blocker pass；
+   - cleaning；
+   - typesetting；
+   - export_check。
+4. 使用 StageExecutor 处理 provider / tool evidence，使用 ArtifactService 登记 official artifact。
+5. 实现 acceptance transactions，一起创建 TextBlocks、OCRResults、TranslationResults、active OCR / translation pointers、cleaned / typeset artifact pointers、WorkflowDecisions、retry budget / task progress 和 stage statuses。
+6. 确保 active pointers 只由 acceptance 选择，绝不按 latest timestamp。
+7. 实现 readiness query：没有 open blocking issues，且存在 present / hash-valid active typeset artifact。
+8. 添加从 Project / Page import 到 `ready_for_export` 的 happy-path integration test。
 
-## 7. Validation command or test target
+## 7. 验证命令或测试目标
 
 ```bash
 pytest tests/integration/test_workflow_happy_path.py
 ```
 
-## 8. Acceptance criteria
+## 8. 验收标准
 
-- One Project, one Batch, and one Page run through fake detection, OCR, translation, cleaning, typesetting, and `export_check`.
-- TextBlocks are created from fake detection.
-- OCRResults and TranslationResults are immutable versions and selected through active pointers.
-- Page active cleaned and typeset artifact pointers are set through acceptance.
-- WorkflowAttempt, ToolRunLog, WorkflowDecision, ProcessingArtifact, and ProcessingProfileSnapshot evidence exist.
-- Page reaches `ready_for_export`.
-- No ExportRecord, output export artifact, ZIP, or manifest is required.
+- 一个 Project、一个 Batch 和一个 Page 跑完 fake detection、OCR、translation、cleaning、typesetting 和 `export_check`。
+- TextBlocks 从 fake detection 创建。
+- OCRResults 和 TranslationResults 是不可变版本，并通过 active pointers 选择。
+- Page active cleaned 和 typeset artifact pointers 通过 acceptance 设置。
+- WorkflowAttempt、ToolRunLog、WorkflowDecision、ProcessingArtifact 和 ProcessingProfileSnapshot evidence 存在。
+- Page 到达 `ready_for_export`。
+- 不需要 ExportRecord、output export artifact、ZIP 或 manifest。
 
-## 9. Failure cases to test
+## 9. 需要测试的失败场景
 
-- Acceptance guard fails when active pointer or stage status changed concurrently; loop reloads or reports conflict rather than silently overwriting.
-- Missing active OCR pointer blocks translation acceptance.
-- Missing active translation pointer blocks typesetting acceptance.
-- Typeset artifact registered but not accepted remains unselected and not readiness-effective.
-- Open blocking issue query, if manually seeded, prevents pure readiness.
+- 当 active pointer 或 stage status 并发变化时，acceptance guard 失败；loop reload 或报告 conflict，而不是静默覆盖。
+- 缺少 active OCR pointer 会阻塞 translation acceptance。
+- 缺少 active translation pointer 会阻塞 typesetting acceptance。
+- Typeset artifact 已登记但未 accepted 时，保持 unselected，且不具备 readiness-effectiveness。
+- 如果手动 seed open blocking issue query，会阻止 pure readiness。
 
-## 10. Commit strategy
+## 10. Commit 策略
 
-Use one focused implementation commit after `pytest tests/integration/test_workflow_happy_path.py` passes, if commits are explicitly allowed. Stage only workflow, repository, domain, artifact/provider touchpoints, fixtures, and tests needed for the happy path.
+如果明确允许 commits，则在 `pytest tests/integration/test_workflow_happy_path.py` 通过后做一个聚焦实现 commit。只 stage happy path 所需的 workflow、repository、domain、artifact / provider touchpoints、fixtures 和 tests。
 
-## 11. Risks and scope traps
+## 11. 风险与范围陷阱
 
-- Implementing broad batch workflow instead of one Page.
-- Creating export output to satisfy readiness.
-- Collapsing translation_check into translation in a way that prevents Slice 06 quality paths.
-- Letting Page.status become the only truth for recovery/readiness.
-- Accepting artifacts/results outside the expected-state transaction.
+- 实现 broad batch workflow，而不是一个 Page。
+- 创建 export output 来满足 readiness。
+- 以阻碍 Slice 06 quality paths 的方式将 translation_check 折叠进 translation。
+- 让 Page.status 成为 recovery / readiness 的唯一事实。
+- 在 expected-state transaction 之外接受 artifacts / results。
 
-## 12. Codex implementation prompt
+## 12. Codex 实现 prompt
 
 ```text
 Goal:
-Implement Slice 05, the first full FakeProvider happy path from one imported Page to ready_for_export.
+实现 Slice 05，即第一个完整 FakeProvider happy path：从一个 imported Page 到 ready_for_export。
 
 Source documents:
 - AGENTS.md
