@@ -228,6 +228,9 @@ docs/implementation/*/PLAN.md
 docs/implementation/*/reviews/
 
 #codex
+
+# Local-only Cleaning Benchmark Pilot review images and candidate masks.
+artifacts/cleaning-benchmark-pilot/
 .codex
 AGENTS.md
 # Local sample images
