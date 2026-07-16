@@ -240,6 +240,12 @@ RealToolSpike总规划.md
 
 data/
 
+# Archived YOLO model-selection experiment inputs and outputs.  The only
+# versioned record of this retired experiment is its final decision report.
+data/local/yolo-model-selection/
+artifacts/yolo-model-selection/
+.tmp/yolo-model-selection/
+
 # Local-only dataset-audit derivative cache and debug visualizations
 artifacts/
 .tmp/dataset-audit/
