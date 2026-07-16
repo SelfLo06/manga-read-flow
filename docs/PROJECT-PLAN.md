@@ -53,15 +53,16 @@
 | `docs/design/execution-contract/final/execution-contract-dd-v0.1.md` | 已形成 Execution Contract 详细设计基线 | 定义 Provider Adapter、ArtifactService、QualityCheckService、StageExecutor 和 FakeProvider 最小契约。 |
 | `docs/design/persistence/final/persistence-readiness-dd-v0.1.md` | 已形成 Persistence Readiness 设计基线 | 定义 Repository / DAO、Unit of Work、migration、recovery 和 idempotency 实现准备。 |
 | `docs/implementation/mvp0-fakeprovider-slice/PLAN.md` | 已形成 MVP-0 FakeProvider 实施计划 | 将首个后端实现拆为 7 个小切片，并给出验证命令与 Codex task prompt。 |
+| `docs/engineering/reviews/mvp0-fakeprovider-backend-closure-review.md` | MVP-0 FakeProvider 后端闭环审查完成 | Slice 01–07 已实现并以 `PASS_WITH_DEFERRED_RISKS` 关闭；不代表 API、UI、真实 Provider 或导出已经完成。 |
 
 当前状态判断：
 
 ```text
-需求基线已完成。
-体系结构设计已完成到 HLD v0.2，并已提升为 docs/HLD.md。
+需求基线与 HLD 已完成。
 MVP-0 所需核心详细设计已完成：Data Model、Workflow State、Execution Contract、Persistence Readiness。
-MVP-0 FakeProvider 单 Page 后端实施计划已完成。
-下一步应启动 MVP-0 FakeProvider Slice 01：Foundation and Project Store。
+MVP-0 FakeProvider 单 Page 后端 Slice 01–07 已实现并通过关闭审查（`PASS_WITH_DEFERRED_RISKS`）。
+当前尚未形成用户可操作的单 Page 产品闭环：API/UI、真实 Provider、正式导出和端到端可见结果仍待后续阶段验证。
+Cleaning 及真实工具 Spike 的结论应以各自最新 final report 为准；它们不自动等同于产品能力授权。
 ```
 
 ---
@@ -137,8 +138,8 @@ MVP-0 FakeProvider 单 Page 后端实施计划已完成。
 | Phase 0 | 项目治理与文档基线 | 建立 AGENTS、文档结构、ADR、协作规则 | 基本完成，后续维护 |
 | Phase 1 | 需求与架构基线 | SRS 和 HLD 定版，形成实现方向 | 已完成 |
 | Phase 2 | 核心详细设计 | 数据模型、状态机、Provider、Artifact、Quality、API 等详细设计 | MVP-0 前置设计已完成；API/UI/Export 详细设计后置 |
-| Phase 3 | 架构验证与工具 Spike | 用 FakeProvider 和真实工具验证高风险点 | FakeProvider 验证计划已完成，Slice 01 待启动 |
-| Phase 4 | MVP-0 单 Page 后端垂直切片 | CLI / 后端方式跑通一页端到端 | 已具备实施计划，代码未启动 |
+| Phase 3 | 架构验证与工具 Spike | 用 FakeProvider 和真实工具验证高风险点 | FakeProvider 后端闭环已完成；真实工具 Spike 仍有能力边界待裁决 |
+| Phase 4 | MVP-0 单 Page 后端垂直切片 | CLI / 后端方式跑通一页端到端 | Slice 01–07 已完成并审查关闭；尚未接入 API/UI、真实 Provider 或正式导出 |
 | Phase 5 | MVP-1 单 Page Web 闭环 | 本地 Web UI 支持单页上传、处理、预览、返工、导出 | 待启动 |
 | Phase 6 | MVP-2 Batch / Recovery / Review / Export | 多页批次、中断恢复、局部返工、ZIP 导出 | 待启动 |
 | Phase 7 | 稳定化测试与质量收敛 | 样本回归、错误提示、日志清理、性能修正 | 待启动 |
