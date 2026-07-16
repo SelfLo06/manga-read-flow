@@ -41,12 +41,18 @@ class MaskPolicy:
     max_component_fraction: float = 0.12
     e1_min_luminance: float = 220.0
     e1_max_stddev: float = 36.0
+    soft_edge_completion_radius: int = 0
+    soft_edge_completion_max_luminance: int = 250
 
     def __post_init__(self) -> None:
         if self.soft_radius < 1 or self.contour_band_px < 1:
             raise Goal6Stop("mask radii must be positive")
         if not 0.5 <= self.structure_quantile < 1.0:
             raise Goal6Stop("invalid structure quantile")
+        if not 0 <= self.soft_edge_completion_radius <= 3:
+            raise Goal6Stop("soft-edge completion radius must be in [0, 3]")
+        if not 1 <= self.soft_edge_completion_max_luminance < 255:
+            raise Goal6Stop("invalid soft-edge completion luminance")
 
 
 @dataclass(frozen=True)
@@ -188,8 +194,6 @@ def process_context(
         area = int(component.sum())
         if policy.min_component_area <= area <= max_area and np.any(component & expanded_seed) and not np.any(component & context_border):
             core |= component
-    soft = dilate(core, policy.soft_radius) & context.mask
-    uncertain = soft & ~core
     contour = boundary(context.mask, policy.contour_band_px)
     gradient = _gradient(gray)
     non_seed = context.mask & ~dilate(seed, policy.soft_radius + 1)
@@ -201,7 +205,23 @@ def process_context(
     neighbor_band = np.zeros_like(context.mask)
     for neighbor in neighbor_contexts:
         neighbor_band |= dilate(neighbor, policy.contour_band_px) & context.mask
-    protected = contour | structure | neighbor_band | uncertain
+    intrinsic_protected = contour | structure | neighbor_band
+    hard_core = core.copy()
+    completed = np.zeros_like(core)
+    if policy.soft_edge_completion_radius:
+        candidate_edge = (
+            dilate(hard_core, policy.soft_edge_completion_radius)
+            & seed
+            & context.mask
+            & ~intrinsic_protected
+            & (gray > threshold)
+            & (gray <= policy.soft_edge_completion_max_luminance)
+        )
+        completed = candidate_edge & ~hard_core
+        core |= completed
+    soft = dilate(core, policy.soft_radius) & context.mask
+    uncertain = soft & ~core
+    protected = intrinsic_protected | uncertain
     safe = context.mask & ~protected
     effective = core & safe
     statuses = _fragment_status(seed, core, owned)
@@ -232,6 +252,8 @@ def process_context(
         decision,
         {
             "context_pixels": int(context.mask.sum()),
+            "hard_core_pixels": int(hard_core.sum()),
+            "soft_edge_completed_pixels": int(completed.sum()),
             "core_pixels": int(core.sum()),
             "effective_pixels": int(effective.sum()),
             "protected_overlap_pixels": int((effective & protected).sum()),
@@ -266,6 +288,24 @@ def border_sampled_fill(image: np.ndarray, effective: np.ndarray, safe: np.ndarr
     color = np.median(image[ring], axis=0).astype(np.uint8)
     output = image.copy()
     output[effective] = color
+    return output
+
+
+def low_radius_telea(image: np.ndarray, effective: np.ndarray, radius: int = 2) -> np.ndarray:
+    """E2-only, local comparison candidate; never a product inpainting path."""
+    if radius != 2:
+        raise Goal6Stop("Goal 6 freezes the E2 Telea comparison radius at 2")
+    if effective.dtype != np.bool_ or effective.shape != image.shape[:2] or not effective.any():
+        raise Goal6Stop("invalid E2 Telea effective mask")
+    try:
+        import cv2
+    except ImportError as error:  # pragma: no cover - dependency is asserted by the E2 harness run.
+        raise Goal6Stop("OpenCV is required for the permitted E2 Telea comparison") from error
+    bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    inpainted = cv2.inpaint(bgr, effective.astype(np.uint8) * 255, float(radius), cv2.INPAINT_TELEA)
+    output = cv2.cvtColor(inpainted, cv2.COLOR_BGR2RGB)
+    if changed_outside(image, output, effective) != 0:
+        raise Goal6Stop("E2 Telea modified pixels outside M_effective")
     return output
 
 

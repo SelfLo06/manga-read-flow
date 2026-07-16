@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from tools.spikes.text_seeded_container_association import goal6_mask_harness as mask
+from tools.spikes.text_seeded_container_association.goal6_build_calibration import _comparison
 
 
 def _fragment(name: str, x: int, y: int) -> mask.Fragment:
@@ -63,3 +64,52 @@ def test_bounded_support_is_never_e1_auto_path():
     )
     assert result.risk == "E3"
     assert result.decision == "REVIEW_REQUIRED"
+
+
+def test_e2_preview_uses_low_radius_telea_and_never_changes_outside_effective_mask():
+    image = np.full((24, 30, 3), 255, dtype=np.uint8)
+    image[8:16, 11:18] = 0
+    effective = np.zeros((24, 30), dtype=np.bool_)
+    effective[8:16, 11:18] = True
+    context = np.ones((24, 30), dtype=np.bool_)
+    result = mask.ContextResult(
+        "container-001",
+        {"f": "assigned_core"},
+        effective,
+        effective,
+        effective,
+        np.zeros_like(effective),
+        np.zeros_like(effective),
+        context,
+        effective,
+        "E2",
+        "REVIEW_REQUIRED",
+        {},
+    )
+
+    sheet = np.asarray(_comparison(image, result))
+    candidate = sheet[:, image.shape[1] * 2 :]
+
+    assert np.any(candidate != image)
+    assert mask.changed_outside(image, candidate, effective) == 0
+
+
+def test_soft_edge_completion_promotes_only_seed_connected_gray_antialias_pixels():
+    image = np.full((50, 60, 3), 255, dtype=np.uint8)
+    image[18:26, 25:31] = 0
+    image[17:27, 24:32] = np.minimum(image[17:27, 24:32], 230)
+    image[18:26, 25:31] = 0
+    context = np.zeros((50, 60), dtype=np.bool_)
+    context[5:45, 8:52] = True
+    result = mask.process_context(
+        image,
+        mask.Context("container-001", ("f1",), context),
+        (mask.Fragment("f1", ((24, 17), (32, 17), (32, 27), (24, 27)), 0.9),),
+        "COARSE_CONTAINER_SEARCH",
+        mask.MaskPolicy(0, 1, 2, 0.95, soft_edge_completion_radius=1),
+    )
+
+    assert result.core[17, 25]
+    assert result.effective[17, 25]
+    assert not result.core[17, 23]  # Outside the seed polygon.
+    assert result.diagnostics["soft_edge_completed_pixels"] > 0

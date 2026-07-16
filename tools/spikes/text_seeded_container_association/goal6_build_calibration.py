@@ -15,9 +15,9 @@ from tools.spikes.text_seeded_container_association import goal6_mask_harness as
 
 
 POLICIES = {
-    "P0_conservative": mask.MaskPolicy(-4, 1, 4, 0.97),
-    "P1_balanced": mask.MaskPolicy(8, 1, 3, 0.95),
-    "P2_recall": mask.MaskPolicy(18, 2, 2, 0.92),
+    "P0_conservative": mask.MaskPolicy(-4, 1, 4, 0.97, soft_edge_completion_radius=1),
+    "P1_balanced": mask.MaskPolicy(8, 1, 3, 0.95, soft_edge_completion_radius=2),
+    "P2_recall": mask.MaskPolicy(18, 2, 2, 0.92, soft_edge_completion_radius=3),
 }
 
 
@@ -64,18 +64,23 @@ def _overlay(image: np.ndarray, result: mask.ContextResult) -> Image.Image:
     return Image.fromarray(np.clip(canvas, 0, 255).astype(np.uint8))
 
 
+def candidate_for(image: np.ndarray, result: mask.ContextResult) -> tuple[np.ndarray, str]:
+    if result.risk == "E1" and result.effective.any():
+        return mask.border_sampled_fill(image, result.effective, result.safe, result.soft), "border_sampled_fill"
+    if result.risk == "E2" and result.effective.any():
+        return mask.low_radius_telea(image, result.effective), "telea_r2_comparison"
+    return image.copy(), f"source_copy_for_{result.risk}"
+
+
 def _comparison(image: np.ndarray, result: mask.ContextResult) -> Image.Image:
     source = Image.fromarray(image)
     overlay = _overlay(image, result)
-    if result.risk == "E1" and result.effective.any():
-        candidate = Image.fromarray(mask.border_sampled_fill(image, result.effective, result.safe, result.soft))
-    else:
-        candidate = source.copy()
+    candidate, _ = candidate_for(image, result)
     width, height = source.size
     sheet = Image.new("RGB", (width * 3, height), "white")
     sheet.paste(source, (0, 0))
     sheet.paste(overlay, (width, 0))
-    sheet.paste(candidate, (width * 2, 0))
+    sheet.paste(Image.fromarray(candidate), (width * 2, 0))
     return sheet
 
 
@@ -118,6 +123,7 @@ def build(root: Path, s1_path: Path, goal5_lock: Path, output_dir: Path) -> dict
                     paths.append(path.name)
                 rows[name] = {
                     "policy": policy.__dict__,
+                    "candidate_methods": [candidate_for(image, item)[1] for item in results],
                     "contexts": [
                         {
                             "context_id": item.context_id,

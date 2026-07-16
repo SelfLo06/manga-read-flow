@@ -6,7 +6,8 @@
 
 - 读取 Goal 5 `case-51..54` source crop、S1 input、calibration lock 与 routed result；所有 hash 必须匹配 Goal 5 matrix。
 - `case-51..53` 是唯一主试验候选；`case-54` 是不可编辑的 abstention control。
-- `cal-51..54` 可以在 calibration 阶段产生局部 mask/fill preview，但不得计入 Goal 6 正式质量结论。
+- 初始 `cal-51..54` 只保留为 calibration 失败/skip 证据，不得单独冻结 policy，也不得计入 Goal 6 正式质量结论。
+- 另冻结 6–8 个 targeted calibration case：2 个普通气泡正例、2 个边界敏感例、2 个负例与 1–2 个无气泡 SFX/有限 support 例；它们必须与 Goal 5 evaluation、R0、Goal 4 source hash 隔离。
 - 所有 Goal 6 运行首先验证 source/crop hash；运行后再次验证。输出目录已存在则失败，禁止覆盖/重跑正式 evaluation。
 
 ## 2. Required artifacts per case
@@ -24,6 +25,19 @@ result.json                         # hashes、route、risk、decision、metrics
 ```
 
 `SKIP` case 不生成 candidate image；仅生成 source、overlay 与 skip reason。
+
+每个非 regionless case 还必须输出以下四张互不混淆的语义层图。它们表达
+`M_effective` 的不同执行语义，不替代 core/soft/uncertain/protected 的详细 overlay：
+
+```text
+all-context-effective-overlay.png
+e1-applied-effective-overlay.png
+e1-plus-e2-comparison-effective-overlay.png
+skipped-e3-effective-overlay.png
+```
+
+其中前者显示已构造的全部 context；后 3 张分别显示 E1 实际写回范围、E1 加 E2
+comparison 范围和按门禁明确跳过的范围。不得用第一张暗示所有 mask 都会被写回。
 
 ## 3. Pixel-mask contract
 
@@ -55,8 +69,8 @@ M_effective ∩ M_protected = ∅
 
 ## 5. Calibration and one-shot evaluation
 
-1. 先在 `cal-51..54` 运行预声明、有限的 mask 参数候选；评价只用几何安全 contract、seed trace 与人工 calibration review，不读取 `case-*` 标签或输出。
-2. calibration 选出单一 policy 并冻结：polarity 规则、core/soft 阈值、component 尺度带、context erosion、protected edge band、E1 variance 与 border-distance 门槛。
+1. 初始 `cal-51..54` 的 review 只作为 reopen 证据；随后在 6–8 个补充 calibration case 上运行预声明、有限的 mask 参数候选。评价只用几何安全 contract、seed trace 与人工 calibration review，不读取 `case-*` 标签或输出。
+2. 只有同一 policy 在多个普通气泡正例上胜出、且不在边界敏感例造成 severe structure damage，才可冻结：polarity 规则、core/soft 阈值、component 尺度带、context erosion、protected edge band、E1 variance 与 border-distance 门槛。
 3. 以 lock 的实现 hash 与参数对 `case-51..54` 运行一次；之后不允许改参数、mask、risk 分类或 fill 选择。
 4. 运行完成后由人工只读 review 评价候选，填写 `ACCEPTABLE / REVIEW / UNUSABLE / SKIP` 与理由；reviewer 不改代码或输出。
 
@@ -96,3 +110,15 @@ M_effective ∩ M_protected = ∅
 | evidence | 简短自由文本 |
 
 `ACCEPTABLE` 只能在 residue=none 且所有结构损伤=none/minor 时填写；任何 severe 或 readable residue 至少为 `REVIEW`。
+
+## 9. Post-lock full-page demonstration
+
+用户指定的 `black2.webp` 与 `gura_color.webp` 仅可在 P0 lock 之后作为一次、独立于
+正式 evaluation 的人工演示输入。每页产生以下并排图：原图、mask/safe overlay、
+`E1-only` candidate、`E2-comparison` candidate。所有 E3、regionless 或 uncertain context
+在两张 candidate 中均保持原像素。
+
+此演示必须记录 source hash、S1 hash、Goal 5 lock hash、P0 lock hash、每个 context 的
+risk/decision、总 `M_effective` 像素数及两种 candidate 的 context 外改动数。后者必须为
+0；否则停止并只保留失败证据。人工观感只可作为后续方向的说明，不能计入本 Harness
+第 6 节的 evaluation gates。
