@@ -126,7 +126,7 @@ Goal 7 的文档、工具、测试和 R0 证据已作为独立历史资产提交
 
 新对话仍应先查看 `git status --short --untracked-files=all`，并且不得对用户后续改动执行 reset、stash、rebase、clean 或 broad stage。
 
-`git log HEAD ...` 可用；包含 `--all` 的 history 查询目前被一个损坏的 `refs/codex/turn-diffs/...` ref 中断，应将其记为仓库卫生问题，但不要在本交接任务中修复。
+`git log HEAD ...` 与 `git log --branches ...` 可用。`git log --all` 会遍历 Codex 的 `refs/codex/turn-diffs/...` checkpoint ref；这些 ref 指向 Git tree 而非 commit，因此 `log` 报错。这不是项目提交历史损坏，也不应删除 checkpoint；历史审查应使用 `HEAD`、`--branches` 或显式 commit 范围。
 
 ## 10. 候选下一路径（不在本文裁决）
 

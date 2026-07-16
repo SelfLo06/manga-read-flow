@@ -86,7 +86,7 @@ Goal 7 文档、工具、测试与 R0 证据已在本次整理中独立提交；
 1. Goal 6 的“expanded cleaning validation”早于 Goal 7，不能覆盖后者的 mask/cleaning block。
 2. Cleaning handoff/design/lock 的早期 sections 仍含过去时态；它们的 Goal 7 supersession section 才是最新状态。
 5. Goal 6/7 和相关数据/报告未进入版本历史，存在证据丢失与不可审查风险。
-6. `git log --all` 因 `refs/codex/turn-diffs/...` 的坏 ref 失败；使用 `git log HEAD` 可取得当前祖先历史。
+6. `git log --all` 会遍历指向 tree 的 Codex checkpoint ref，因而不适合本仓库的提交历史审查；使用 `git log HEAD`、`git log --branches` 或显式 commit 范围可读。
 
 ## G. 当前测试证据
 
