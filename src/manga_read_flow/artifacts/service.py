@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path, PurePosixPath
+import json
 import re
 import shutil
 import struct
@@ -38,6 +39,8 @@ class ArtifactService:
         ".jpeg": "image/jpeg",
         ".webp": "image/webp",
     }
+    _JSON_MEDIA_TYPE = "application/json"
+    _MAX_JSON_EVIDENCE_BYTES = 4 * 1024 * 1024
 
     def __init__(
         self,
@@ -176,6 +179,55 @@ class ArtifactService:
                 retention_class=retention_class,
                 storage_state="present",
                 safety=safety or ArtifactSafetyMetadata(),
+                dependency_hash=dependency_hash,
+            )
+        )
+
+    def register_stage_json(
+        self,
+        *,
+        temp_path: Path | str,
+        batch_id: str | None,
+        page_id: str | None,
+        owner_type: str,
+        owner_id: str,
+        artifact_type: str,
+        source_stage: str,
+        retention_class: str = "successful_payload",
+        safety: ArtifactSafetyMetadata | None = None,
+        dependency_hash: str | None = None,
+    ) -> ProcessingArtifactSnapshot:
+        """Promote bounded, UTF-8 JSON evidence through the official path."""
+        source = Path(temp_path)
+        if not source.is_file() or source.suffix.lower() != ".json":
+            raise ArtifactRegistrationError("Stage JSON evidence is not available.")
+        if source.stat().st_size > self._MAX_JSON_EVIDENCE_BYTES:
+            raise ArtifactRegistrationError("Stage JSON evidence exceeds the size limit.")
+        try:
+            json.loads(source.read_text(encoding="utf-8"))
+        except UnicodeDecodeError as exc:
+            raise ArtifactRegistrationError("Stage JSON evidence must be UTF-8.") from exc
+        except json.JSONDecodeError as exc:
+            raise ArtifactRegistrationError("Stage JSON evidence must be valid JSON.") from exc
+        artifact_id = f"artifact-{uuid4()}"
+        relative_path = self._stage_relative_path(
+            artifact_id=artifact_id,
+            artifact_type=artifact_type,
+            source_stage=source_stage,
+            suffix=".json",
+        )
+        destination = self._resolve_project_relative_path(relative_path)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        _copy_without_overwrite(source, destination)
+        return self._artifact_repository.register_artifact(
+            RegisterArtifactMetadata(
+                artifact_id=artifact_id, batch_id=batch_id, page_id=page_id,
+                owner_type=owner_type, owner_id=owner_id, artifact_type=artifact_type,
+                source_stage=source_stage, relative_path=relative_path,
+                file_hash=_sha256_file(destination), hash_algorithm="sha256",
+                byte_size=destination.stat().st_size, mime_type=self._JSON_MEDIA_TYPE,
+                width=None, height=None, retention_class=retention_class,
+                storage_state="present", safety=safety or ArtifactSafetyMetadata(),
                 dependency_hash=dependency_hash,
             )
         )

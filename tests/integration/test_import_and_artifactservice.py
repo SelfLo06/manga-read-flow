@@ -282,6 +282,26 @@ def test_import_transaction_failure_leaves_artifact_but_no_imported_page(tmp_pat
     assert (project.workspace_path / failed_artifact.relative_path).is_file()
 
 
+def test_artifact_service_promotes_json_evidence_without_image_inspection(tmp_path):
+    project, repositories = _ready_project(tmp_path)
+    _, artifact_service = _import_services(project, repositories)
+    evidence = tmp_path / "evidence.json"
+    evidence.write_text('{"decision":"pass"}\n', encoding="utf-8")
+
+    artifact = artifact_service.register_stage_json(
+        temp_path=evidence,
+        batch_id="batch-json",
+        page_id="page-json",
+        owner_type="cleaning_result",
+        owner_id="result-json",
+        artifact_type="validation_evidence",
+        source_stage="cleaning",
+    )
+
+    assert artifact.mime_type == "application/json"
+    assert (project.workspace_path / artifact.relative_path).read_text(encoding="utf-8") == evidence.read_text(encoding="utf-8")
+
+
 def _ready_project(tmp_path):
     store = AppStore.initialize(tmp_path / "workspace")
     created = store.create_project(

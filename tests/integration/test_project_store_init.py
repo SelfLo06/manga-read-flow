@@ -43,12 +43,21 @@ def test_project_creation_initializes_project_db_identity_and_ready_repositories
     assert opened.project_id == created.project_id
     assert opened.metadata.project_id == created.project_id
     assert [migration.version for migration in opened.project_migrations] == [
-        "project_baseline_v1"
+        "project_baseline_v1",
+        "project_visual_contract_v2",
     ]
+    assert opened.repositories().identity.get_metadata().project_id == created.project_id
 
-    repositories = opened.repositories()
 
-    assert repositories.identity.get_metadata().project_id == created.project_id
+def test_existing_v1_project_requires_and_can_apply_visual_contract_migration(tmp_path):
+    store = AppStore.initialize(tmp_path / "workspace")
+    project = store.create_project(name="Upgrade", source_language="ja", target_language="zh-Hans")
+    with sqlite3.connect(project.project_db_path) as connection:
+        connection.execute("DELETE FROM schema_migrations WHERE version = ?", ("project_visual_contract_v2",))
+        connection.execute("DROP TABLE cleaning_result_records")
+    assert store.open_project(project.project_id).status is ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED
+    assert store.migrate_project(project.project_id).status is ProjectOpenStatus.READY
+
 
 
 def test_project_store_keeps_second_project_isolated(tmp_path):

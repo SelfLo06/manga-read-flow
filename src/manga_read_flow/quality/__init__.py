@@ -109,6 +109,11 @@ def _issue_drafts(check_input: QualityCheckInput) -> tuple[IssueDraft, ...]:
     if check_input.stage == "cleaning" and _has_cleaning_skip(check_input):
         return (_cleaning_skip_issue(check_input),)
 
+    if check_input.stage == "cleaning":
+        cleaning_issues = _cleaning_validation_issues(check_input)
+        if cleaning_issues:
+            return cleaning_issues
+
     if check_input.stage == "typesetting" and _has_typesetting_overflow(check_input):
         return (_typesetting_overflow_issue(check_input),)
 
@@ -116,6 +121,77 @@ def _issue_drafts(check_input: QualityCheckInput) -> tuple[IssueDraft, ...]:
         return (_artifact_registration_issue(check_input),)
 
     return ()
+
+
+def _cleaning_validation_issues(check_input: QualityCheckInput) -> tuple[IssueDraft, ...]:
+    evidence = check_input.candidate_outputs
+    related_artifact_id = evidence.get("primary_evidence_artifact_id")
+    if related_artifact_id is not None:
+        related_artifact_id = str(related_artifact_id)
+    rules = (
+        ("visible_residue", "cleaning_residue", "cleaning_residue", "cleaning.residue"),
+        ("outside_safe_edit", "structure_damage", "outside_safe_edit", "cleaning.structure_damage"),
+        ("protected_damage", "structure_damage", "protected_structure_damage", "cleaning.structure_damage"),
+        ("uncertainty_damage", "structure_damage", "uncertainty_structure_damage", "cleaning.structure_damage"),
+        ("background_inconsistency", "background_inconsistency", "cleaning_background_inconsistency", "cleaning.background_inconsistency"),
+        ("ordinary_bubble_false_exclusion", "ordinary_bubble_false_exclusion", "cleaning_eligibility_unexplained", "cleaning.eligibility_exclusion"),
+    )
+    drafts = [
+        _draft(
+            check_input,
+            target_type=check_input.target_type,
+            target_id=check_input.target_id,
+            discovered_stage="cleaning",
+            root_stage="cleaning",
+            issue_type=issue_type,
+            error_code=error_code,
+            severity="blocking",
+            is_blocking=True,
+            message_key=message_key,
+            suggested_action_key="action.review_skip_or_retry_cleaning",
+            related_artifact_id=related_artifact_id,
+        )
+        for key, issue_type, error_code, message_key in rules
+        if bool(evidence.get(key))
+    ]
+    for text_block_id in evidence.get("incomplete_text_block_ids", ()):
+        drafts.append(
+            _draft(
+                check_input,
+                target_type="text_block",
+                target_id=str(text_block_id),
+                text_block_id=str(text_block_id),
+                discovered_stage="cleaning",
+                root_stage="cleaning",
+                issue_type="cleaning_input_incomplete",
+                error_code="required_support_unsafe",
+                severity="blocking",
+                is_blocking=True,
+                message_key="cleaning.input_incomplete",
+                suggested_action_key="action.review_skip_or_retry_cleaning",
+                related_artifact_id=related_artifact_id,
+            )
+        )
+    if evidence.get("required_support_incomplete") and not evidence.get(
+        "incomplete_text_block_ids"
+    ):
+        drafts.append(
+            _draft(
+                check_input,
+                target_type=check_input.target_type,
+                target_id=check_input.target_id,
+                discovered_stage="cleaning",
+                root_stage="cleaning",
+                issue_type="cleaning_input_incomplete",
+                error_code="required_support_unsafe",
+                severity="blocking",
+                is_blocking=True,
+                message_key="cleaning.input_incomplete",
+                suggested_action_key="action.review_skip_or_retry_cleaning",
+                related_artifact_id=related_artifact_id,
+            )
+        )
+    return tuple(drafts)
 
 
 def _provider_refusal_issue(check_input: QualityCheckInput) -> IssueDraft:

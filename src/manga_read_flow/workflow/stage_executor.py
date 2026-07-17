@@ -238,8 +238,20 @@ def _register_temp_artifacts(
             continue
         try:
             _require_attempt_temp_path(temp_file.temp_path, context.attempt_temp_root)
-            registered_artifacts.append(
-                artifact_service.register_stage_output(
+            if temp_file.media_type == "application/json":
+                artifact = artifact_service.register_stage_json(
+                    temp_path=temp_file.temp_path,
+                    batch_id=context.batch_id,
+                    page_id=context.page_id,
+                    owner_type="page",
+                    owner_id=context.page_id,
+                    artifact_type=temp_file.expected_artifact_type,
+                    source_stage=context.stage,
+                    safety=_artifact_safety(temp_file.safety_flags),
+                    dependency_hash=context.input_hash,
+                )
+            else:
+                artifact = artifact_service.register_stage_output(
                     temp_path=temp_file.temp_path,
                     batch_id=context.batch_id,
                     page_id=context.page_id,
@@ -251,7 +263,7 @@ def _register_temp_artifacts(
                     safety=_artifact_safety(temp_file.safety_flags),
                     dependency_hash=context.input_hash,
                 )
-            )
+            registered_artifacts.append(artifact)
         except (ArtifactRegistrationError, ValueError):
             artifact_errors.append(
                 StageArtifactError(

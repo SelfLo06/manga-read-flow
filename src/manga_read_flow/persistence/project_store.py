@@ -24,15 +24,22 @@ from manga_read_flow.persistence.repository_uow_core import (
     WorkflowExecutionRepository,
     initialize_repository_core_schema,
 )
+from manga_read_flow.persistence.visual_contract_repository import (
+    VisualContractRepository,
+)
 
 
 APP_BASELINE_VERSION = "app_baseline_v1"
 PROJECT_BASELINE_VERSION = "project_baseline_v1"
+PROJECT_VISUAL_CONTRACT_VERSION = "project_visual_contract_v2"
 APP_BASELINE_CHECKSUM = sha256(
     b"app_baseline_v1:projects:schema_migrations"
 ).hexdigest()
 PROJECT_BASELINE_CHECKSUM = sha256(
     b"project_baseline_v1:project_metadata:schema_migrations:repository_uow_core:artifactservice_import:slice06_quality_issues_readiness"
+).hexdigest()
+PROJECT_VISUAL_CONTRACT_CHECKSUM = sha256(
+    b"project_visual_contract_v2:page_current_revision:instance_segment_eligibility:cleaning_result_history"
 ).hexdigest()
 
 
@@ -289,6 +296,36 @@ class AppStore:
                 project_record=project_record,
             )
 
+    def migrate_project(self, project_id: str) -> ProjectOpenResult:
+        """Apply the explicit v2 visual-contract migration for one project."""
+        self._require_ready()
+        project_record = self._load_project_record(project_id)
+        if project_record is None or not self._project_paths_are_valid(project_record):
+            return ProjectOpenResult(status=ProjectOpenStatus.REPAIR_REQUIRED, project_id=project_id)
+        try:
+            with _connect_existing(project_record.project_db_path) as connection:
+                base = _verify_migration(
+                    connection,
+                    version=PROJECT_BASELINE_VERSION,
+                    checksum=PROJECT_BASELINE_CHECKSUM,
+                    missing_status=ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED,
+                )
+                if base is not ProjectOpenStatus.READY:
+                    return ProjectOpenResult(status=base, project_id=project_id, project_record=project_record)
+                initialize_repository_core_schema(connection)
+                _ensure_migration(
+                    connection,
+                    version=PROJECT_VISUAL_CONTRACT_VERSION,
+                    checksum=PROJECT_VISUAL_CONTRACT_CHECKSUM,
+                )
+                connection.execute(
+                    "UPDATE project_metadata SET project_schema_version = ?",
+                    (PROJECT_VISUAL_CONTRACT_VERSION,),
+                )
+        except sqlite3.DatabaseError:
+            return ProjectOpenResult(status=ProjectOpenStatus.PROJECT_MIGRATION_FAILED, project_id=project_id, project_record=project_record)
+        return self.open_project(project_id)
+
     def _load_project_record(self, project_id: str) -> ProjectRecord | None:
         with _connect(self.app_db_path) as connection:
             row = connection.execute(
@@ -372,6 +409,10 @@ class ProjectRepositories:
             project_id=project_id,
         )
         self.artifact_metadata = ArtifactMetadataRepository(
+            project_db_path=project_db_path,
+            project_id=project_id,
+        )
+        self.visual_contract = VisualContractRepository(
             project_db_path=project_db_path,
             project_id=project_id,
         )
@@ -473,6 +514,11 @@ def _initialize_project_database(
             version=PROJECT_BASELINE_VERSION,
             checksum=PROJECT_BASELINE_CHECKSUM,
         )
+        _ensure_migration(
+            connection,
+            version=PROJECT_VISUAL_CONTRACT_VERSION,
+            checksum=PROJECT_VISUAL_CONTRACT_CHECKSUM,
+        )
         _require_ready_migration(
             connection,
             version=PROJECT_BASELINE_VERSION,
@@ -493,7 +539,7 @@ def _initialize_project_database(
             )
             VALUES (?, ?, ?, ?, NULL)
             """,
-            (project_id, PROJECT_BASELINE_VERSION, workspace_identity, now),
+            (project_id, PROJECT_VISUAL_CONTRACT_VERSION, workspace_identity, now),
         )
 
 
@@ -588,10 +634,18 @@ def _app_migration_status(connection: sqlite3.Connection) -> ProjectOpenStatus:
 
 
 def _project_migration_status(connection: sqlite3.Connection) -> ProjectOpenStatus:
-    return _verify_migration(
+    base_status = _verify_migration(
         connection,
         version=PROJECT_BASELINE_VERSION,
         checksum=PROJECT_BASELINE_CHECKSUM,
+        missing_status=ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED,
+    )
+    if base_status is not ProjectOpenStatus.READY:
+        return base_status
+    return _verify_migration(
+        connection,
+        version=PROJECT_VISUAL_CONTRACT_VERSION,
+        checksum=PROJECT_VISUAL_CONTRACT_CHECKSUM,
         missing_status=ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED,
     )
 

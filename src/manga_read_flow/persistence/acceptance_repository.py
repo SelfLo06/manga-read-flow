@@ -18,6 +18,10 @@ from manga_read_flow.persistence.workflow_execution_repository import (
     _load_task,
     _task_conflicts,
 )
+from manga_read_flow.persistence.visual_contract_repository import (
+    CleaningResultDraft,
+    insert_cleaning_result,
+)
 
 
 @dataclass(frozen=True)
@@ -35,6 +39,9 @@ class ExpectedState:
     active_ocr_result_ids: Mapping[str, str | None] = field(default_factory=dict)
     active_translation_result_ids: Mapping[str, str | None] = field(default_factory=dict)
     page_artifact_ids: Mapping[str, Mapping[str, str | None]] = field(default_factory=dict)
+    visual_contract_revision_ids: Mapping[str, str] = field(default_factory=dict)
+    attempt_id: str | None = None
+    attempt_status: str | None = None
     stage_statuses: tuple[ExpectedStageStatus, ...] = ()
 
 
@@ -153,6 +160,7 @@ class AcceptanceCommand:
     accepted_text_blocks: tuple[AcceptedTextBlock, ...] = ()
     page_statuses: tuple[PageStatusUpdate, ...] = ()
     attempt_terminal_status: str | None = None
+    cleaning_result: CleaningResultDraft | None = None
 
 
 @dataclass(frozen=True)
@@ -191,6 +199,12 @@ class AcceptanceRepository:
             conflicts.extend(
                 _stage_status_conflicts(connection, self._project_id, command.expected)
             )
+            conflicts.extend(
+                _visual_contract_conflicts(connection, self._project_id, command.expected)
+            )
+            conflicts.extend(
+                _attempt_conflicts(connection, self._project_id, command.expected)
+            )
             if conflicts:
                 return AcceptanceOutcome(
                     committed=False,
@@ -206,6 +220,12 @@ class AcceptanceRepository:
                 _apply_active_pointer(connection, self._project_id, pointer)
             for issue_change in command.issue_lifecycle:
                 _apply_issue_change(connection, self._project_id, issue_change)
+            if command.cleaning_result is not None:
+                insert_cleaning_result(
+                    connection,
+                    self._project_id,
+                    command.cleaning_result,
+                )
             _insert_workflow_decision(
                 connection,
                 self._project_id,
@@ -328,6 +348,48 @@ def _stage_status_conflicts(
         if actual_status != expected_status.status:
             conflicts.append(column)
     return tuple(conflicts)
+
+
+def _visual_contract_conflicts(
+    connection: sqlite3.Connection,
+    project_id: str,
+    expected: ExpectedState,
+) -> tuple[str, ...]:
+    conflicts = []
+    for page_id, revision_id in expected.visual_contract_revision_ids.items():
+        row = connection.execute(
+            """
+            SELECT active_visual_contract_revision_id
+            FROM page_visual_contract_state
+            WHERE project_id = ? AND page_id = ?
+            """,
+            (project_id, page_id),
+        ).fetchone()
+        if row is None or row["active_visual_contract_revision_id"] != revision_id:
+            conflicts.append("active_visual_contract_revision_id")
+    return tuple(conflicts)
+
+
+def _attempt_conflicts(
+    connection: sqlite3.Connection,
+    project_id: str,
+    expected: ExpectedState,
+) -> tuple[str, ...]:
+    if expected.attempt_id is None:
+        return ()
+    row = connection.execute(
+        """
+        SELECT status
+        FROM workflow_attempts
+        WHERE project_id = ? AND attempt_id = ?
+        """,
+        (project_id, expected.attempt_id),
+    ).fetchone()
+    if row is None:
+        return ("attempt_id",)
+    if expected.attempt_status is not None and row["status"] != expected.attempt_status:
+        return ("attempt_status",)
+    return ()
 
 
 def _insert_accepted_text_block(

@@ -52,6 +52,11 @@ from manga_read_flow.persistence.workflow_execution_repository import (
     WorkflowExecutionRepository,
     initialize_workflow_execution_schema,
 )
+from manga_read_flow.persistence.visual_contract_repository import (
+    CleaningResultDraft,
+    VisualContractRepository,
+    initialize_visual_contract_schema,
+)
 
 
 class ProjectUnitOfWork:
@@ -86,6 +91,7 @@ def initialize_repository_core_schema(connection: sqlite3.Connection) -> None:
     initialize_content_state_schema(connection)
     initialize_workflow_execution_schema(connection)
     initialize_artifact_metadata_schema(connection)
+    initialize_visual_contract_schema(connection)
 
 
 __all__ = [
@@ -127,5 +133,7 @@ __all__ = [
     "UnitOfWorkOutcome",
     "WorkflowDecisionDraft",
     "WorkflowExecutionRepository",
+    "CleaningResultDraft",
+    "VisualContractRepository",
     "initialize_repository_core_schema",
 ]
