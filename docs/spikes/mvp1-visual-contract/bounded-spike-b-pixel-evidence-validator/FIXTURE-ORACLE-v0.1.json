@@ -1,0 +1,12 @@
+{
+  "schema_version": "mvp1-visual-contract-spike-b-evaluation-oracle-v1",
+  "purpose": "evaluation-only; must be loaded after PixelEvidenceSnapshot freeze",
+  "glyph_mutation_expectations": {
+    "missing": "segment_missing",
+    "duplicate": "segment_rendered_multiple_times",
+    "wrong_instance": "wrong_instance_rendering",
+    "overflow": "glyph_overflow",
+    "boundary_touch": "glyph_boundary_touch",
+    "wrong_validator_region": "validator_region_binding_mismatch"
+  }
+}
