@@ -1,0 +1,12 @@
+{
+  "schema_version": "mvp1-visual-contract-spike-c-fixture-oracle-v1",
+  "purpose": "Fixed expected decisions for deterministic controls; the harness reads this only after candidate snapshot creation.",
+  "controls": {
+    "A_complete_removal": "PASS",
+    "B_halo_remaining": "BLOCK",
+    "C_near_white_residue": "BLOCK",
+    "D_key_stroke": "BLOCK",
+    "E_background_noise": "PASS",
+    "F_incomplete_required_safe": "INCOMPLETE_REVIEW"
+  }
+}
