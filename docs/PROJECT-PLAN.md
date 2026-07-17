@@ -203,9 +203,9 @@ AGENTS.md
 docs/SRS-v1.0.md
 docs/HLD.md
 docs/PROJECT-PLAN.md
-docs/design/
-docs/research/
-docs/adr/
+docs/design/<area>/（含 final/ 与域内 adr/）
+docs/spikes/
+docs/adr/architecture/
 ```
 
 ### 5.4 主要工作

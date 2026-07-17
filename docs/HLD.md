@@ -2040,7 +2040,7 @@ Artifact 规则：
 
 ## 19. 关键架构决策与 ADR 索引
 
-HLD 正文保留架构结论，ADR 记录“为什么这样选、拒绝什么、后果是什么”。以下 ADR 建议放入：
+HLD 正文保留架构结论，ADR 记录“为什么这样选、拒绝什么、后果是什么”。跨详细设计域的架构 ADR 放入 `docs/adr/architecture/`；只影响单一设计域的 ADR 放在 `docs/design/<area>/adr/`：
 
 ```text
 docs/adr/architecture/
