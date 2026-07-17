@@ -1,0 +1,44 @@
+{
+  "schema_version": "mvp1-visual-contract-spike-a-oracle-v1",
+  "purpose": "evaluation-only; forbidden as candidate-generation input",
+  "cases": {
+    "case-71": {
+      "expected_instance_partitions": [
+        ["case-71__g001__s01"],
+        ["case-71__g002__s01"],
+        ["case-71__g002__s02"],
+        ["case-71__g003__s01"],
+        ["case-71__g004__s01"],
+        ["case-71__g005__s01"]
+      ],
+      "review_focus": ["case-71__g002__s01", "case-71__g002__s02"]
+    },
+    "case-72": {
+      "expected_instance_partitions": [
+        ["case-72__g001__s01"],
+        ["case-72__g002__s01"],
+        ["case-72__g003__s01"],
+        ["case-72__g004__s01"],
+        ["case-72__g005__s01"],
+        ["case-72__g006__s01"],
+        ["case-72__g007__s01", "case-72__g007__s02"]
+      ],
+      "historical_eligible_count": 3,
+      "historical_excluded_count": 5,
+      "review_focus": ["case-72__g002__s01", "case-72__g003__s01"]
+    },
+    "synthetic-contact-n3": {
+      "expected_instance_partitions": [["n3-s1"], ["n3-s2"], ["n3-s3"]]
+    },
+    "synthetic-multi-column": {
+      "expected_instance_partitions": [["columns-left", "columns-right"]]
+    },
+    "synthetic-two-paragraphs": {
+      "expected_instance_partitions": [["paragraph-top", "paragraph-bottom"]]
+    },
+    "synthetic-mixed-risk": {
+      "expected_instance_partitions": [["mixed-safe"], ["mixed-risky"]],
+      "require_distinct_candidate_risks": true
+    }
+  }
+}
