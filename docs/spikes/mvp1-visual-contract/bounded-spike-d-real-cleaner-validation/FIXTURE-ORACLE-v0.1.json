@@ -1,0 +1,11 @@
+{
+  "schema_version": "mvp1-visual-contract-spike-d-fixture-oracle-v1",
+  "purpose": "Expected decisions for deliberate validation failures only; read after real candidate snapshot creation.",
+  "controls": {
+    "control_source_unchanged": "BLOCK",
+    "control_core_only": "BLOCK",
+    "control_outside_safe": "BLOCK",
+    "control_protected_changed": "BLOCK",
+    "control_wrong_background": "BLOCK"
+  }
+}
