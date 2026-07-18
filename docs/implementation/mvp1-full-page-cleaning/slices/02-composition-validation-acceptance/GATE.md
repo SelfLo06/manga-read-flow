@@ -1,6 +1,6 @@
 # Slice 2——组合、验证与原子验收 Gate
 
-**状态：`ACCEPTED_WITH_RECORDED_ENVIRONMENT_LIMITS`。**
+**状态：`ACCEPTED`。**
 
 | 检查项 | 状态 | 证据 |
 | --- | --- | --- |
@@ -32,8 +32,9 @@
 | `COMBINED_CODE_HEALTH_REVIEW` | DEFERRED | 三 Slice 完成后才允许 |
 | `FOCUSED_VALIDATION` | PASS | Slice 2 核心 27 tests；聚合定向 57 passed，2 deselected |
 | `WIDEST_FEASIBLE_INTEGRATION` | PASS | 112 passed，2 deselected |
-| `FULL_INTEGRATION_SUITE` | ENVIRONMENT_BLOCKED | 当前解释器缺 `cv2`；Windows SQLite 文件句柄锁 |
-| `SLICE_2` | ACCEPTED_WITH_RECORDED_ENVIRONMENT_LIMITS | 自动 Gate 裁决 |
+| `FULL_INTEGRATION_SUITE` | PASS | Linux `manga-read-flow` Conda 环境：`117 passed`，含此前 `cv2` 收集与 SQLite 删除恢复用例 |
+| `FULL_UNIT_SUITE` | NOT_GREEN_UNRELATED | `227 passed, 2 failed`：既有 Goal 7 `skimage` 依赖和既有 R0 matrix harness hash，不涉及 Slice 2 |
+| `SLICE_2` | ACCEPTED | 自动 Gate 裁决 |
 | `NEXT_ALLOWED_SLICE` | SLICE_3 | 本提交不包含 Slice 3 |
 
-Gate 文档是完成记录，不是人工审批点。本 Slice 不需要人工视觉 FORM；环境阻塞没有被写成 full-suite PASS。
+Gate 文档是完成记录，不是人工审批点。本 Slice 不需要人工视觉 FORM；完整 integration 已通过。完整 unit 的两个既有非 Slice 2 失败没有被写成 PASS。

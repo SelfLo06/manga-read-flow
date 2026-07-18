@@ -40,8 +40,9 @@ foundation id、checksum 与既有 DDL 未改写；没有 v4。
 - Slice 1 foundation focused：包含于聚合回归；单独最终回归命令见 Gate 交付记录。
 - 最宽可行 integration（忽略缺 `cv2` 的 `test_single_page_cleaning_slice.py`，排除两个 Windows 删除探针）：`112 passed, 2 deselected`。
 - Slice 2 变更 Python 文件 Ruff：`All checks passed`；compileall：PASS；`git diff --check`：PASS。全仓 Ruff 另检出 33 个既有 Spike/测试风格问题，未修改无关文件。
+- 后续 Linux `manga-read-flow` Conda 环境完整 integration：`117 passed in 25.74s`，包含此前因 `cv2` 无法收集的 `test_single_page_cleaning_slice.py`，以及两个此前受 Windows/UNC SQLite 文件句柄锁影响的 ProjectStore 删除恢复测试。
 
-完整 integration suite 在收集 `test_single_page_cleaning_slice.py` 时因 `ModuleNotFoundError: cv2` 阻塞。完整 unit suite 同样因九个既有视觉 Spike/Typesetting 测试导入 `cv2` 而阻塞。两个 ProjectStore 删除数据库测试在当前 Windows/UNC 解释器下因 SQLite 文件句柄锁失败；这些均记录为环境限制，不记为 PASS。
+因此 `FULL_INTEGRATION_SUITE = PASS`。同一 Linux 环境的完整 unit suite 为 `227 passed, 2 failed`：其一是既有 text-seeded-container Goal 7 Spike 缺少 `skimage` / `scikit-image`；其二是既有 text-seeded-container R0 matrix 的 Goal-2 harness SHA-256 与冻结预期不符。两项均不涉及 Slice 2 文件、迁移或验收合同，故记录为项目级待处理项，不改变本 Slice Gate。
 
 ## 风险与范围确认
 
@@ -51,4 +52,4 @@ ArtifactService physical integrity check 发生在 acceptance transaction 之前
 
 ## 最终裁决
 
-`SLICE_2 = ACCEPTED_WITH_RECORDED_ENVIRONMENT_LIMITS`。下一允许任务为 Slice 3。
+`SLICE_2 = ACCEPTED`。下一允许任务为 Slice 3。

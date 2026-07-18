@@ -7,10 +7,10 @@
 | Slice | 状态 | 说明 |
 | --- | --- | --- |
 | [01——台账基础](slices/01-ledger-foundation/README.md) | `ACCEPTED_WITH_RECORDED_ENVIRONMENT_LIMITS` | v3 migration、ledger persistence、recovery 和边界测试已完成 |
-| [02——组合、验证与原子验收](slices/02-composition-validation-acceptance/README.md) | `ACCEPTED_WITH_RECORDED_ENVIRONMENT_LIMITS` | completion migration、组合、验证、issue lifecycle、原子验收和 stale repair 已完成 |
+| [02——组合、验证与原子验收](slices/02-composition-validation-acceptance/README.md) | `ACCEPTED` | completion migration、组合、验证、issue lifecycle、原子验收和 stale repair 已完成；Linux 全量 integration 已通过 |
 | [03——case-71 收口与 case-72 泛化](slices/03-real-page-closure/README.md) | `NEXT_ALLOWED_SLICE` | 尚未运行真实整页收口和泛化 Gate |
 
-`FULL_INTEGRATION_SUITE = ENVIRONMENT_BLOCKED`，原因是当前 Windows/UNC 测试环境缺少 `cv2`，并存在 SQLite 文件句柄锁。该项不是 PASS。
+Slice 2 已在 Linux `manga-read-flow` Conda 环境重验：`FULL_INTEGRATION_SUITE = PASS`（`117 passed`）。Slice 1 的历史 Gate 保持原记录，不因后续环境验证而改写。
 
 ## 三 Slice 边界
 
