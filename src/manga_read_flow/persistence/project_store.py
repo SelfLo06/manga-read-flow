@@ -27,11 +27,15 @@ from manga_read_flow.persistence.repository_uow_core import (
 from manga_read_flow.persistence.visual_contract_repository import (
     VisualContractRepository,
 )
+from manga_read_flow.persistence.full_page_cleaning_ledger_repository import (
+    FullPageCleaningLedgerRepository,
+)
 
 
 APP_BASELINE_VERSION = "app_baseline_v1"
 PROJECT_BASELINE_VERSION = "project_baseline_v1"
 PROJECT_VISUAL_CONTRACT_VERSION = "project_visual_contract_v2"
+PROJECT_FULL_PAGE_CLEANING_LEDGER_VERSION = "project_full_page_cleaning_ledger_v3"
 APP_BASELINE_CHECKSUM = sha256(
     b"app_baseline_v1:projects:schema_migrations"
 ).hexdigest()
@@ -40,6 +44,9 @@ PROJECT_BASELINE_CHECKSUM = sha256(
 ).hexdigest()
 PROJECT_VISUAL_CONTRACT_CHECKSUM = sha256(
     b"project_visual_contract_v2:page_current_revision:instance_segment_eligibility:cleaning_result_history"
+).hexdigest()
+PROJECT_FULL_PAGE_CLEANING_LEDGER_CHECKSUM = sha256(
+    b"project_full_page_cleaning_ledger_v3:run:inventory:disposition:instance_result:correction"
 ).hexdigest()
 
 
@@ -265,10 +272,30 @@ class AppStore:
                         project_migrations=_load_migrations(connection),
                     )
 
+                metadata_version_status = _project_metadata_version_status(
+                    metadata.project_schema_version
+                )
+                if metadata_version_status is not ProjectOpenStatus.READY:
+                    return ProjectOpenResult(
+                        status=metadata_version_status,
+                        project_id=project_id,
+                        project_record=project_record,
+                        metadata=metadata,
+                        project_migrations=_load_migrations(connection),
+                    )
+
                 migration_status = _project_migration_status(connection)
                 if migration_status is not ProjectOpenStatus.READY:
                     return ProjectOpenResult(
                         status=migration_status,
+                        project_id=project_id,
+                        project_record=project_record,
+                        metadata=metadata,
+                        project_migrations=_load_migrations(connection),
+                    )
+                if metadata.project_schema_version != PROJECT_FULL_PAGE_CLEANING_LEDGER_VERSION:
+                    return ProjectOpenResult(
+                        status=ProjectOpenStatus.REPAIR_REQUIRED,
                         project_id=project_id,
                         project_record=project_record,
                         metadata=metadata,
@@ -297,13 +324,21 @@ class AppStore:
             )
 
     def migrate_project(self, project_id: str) -> ProjectOpenResult:
-        """Apply the explicit v2 visual-contract migration for one project."""
+        """Apply explicit additive project migrations through the ledger v3 schema."""
         self._require_ready()
         project_record = self._load_project_record(project_id)
         if project_record is None or not self._project_paths_are_valid(project_record):
             return ProjectOpenResult(status=ProjectOpenStatus.REPAIR_REQUIRED, project_id=project_id)
         try:
             with _connect_existing(project_record.project_db_path) as connection:
+                metadata = _load_project_metadata(connection)
+                if metadata is None:
+                    return ProjectOpenResult(status=ProjectOpenStatus.REPAIR_REQUIRED, project_id=project_id, project_record=project_record)
+                metadata_version_status = _project_metadata_version_status(
+                    metadata.project_schema_version
+                )
+                if metadata_version_status is not ProjectOpenStatus.READY:
+                    return ProjectOpenResult(status=metadata_version_status, project_id=project_id, project_record=project_record, metadata=metadata)
                 base = _verify_migration(
                     connection,
                     version=PROJECT_BASELINE_VERSION,
@@ -312,15 +347,45 @@ class AppStore:
                 )
                 if base is not ProjectOpenStatus.READY:
                     return ProjectOpenResult(status=base, project_id=project_id, project_record=project_record)
+                visual = _verify_migration(
+                    connection,
+                    version=PROJECT_VISUAL_CONTRACT_VERSION,
+                    checksum=PROJECT_VISUAL_CONTRACT_CHECKSUM,
+                    missing_status=ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED,
+                )
+                if visual not in {
+                    ProjectOpenStatus.READY,
+                    ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED,
+                }:
+                    return ProjectOpenResult(status=visual, project_id=project_id, project_record=project_record)
+                ledger = _verify_migration(
+                    connection,
+                    version=PROJECT_FULL_PAGE_CLEANING_LEDGER_VERSION,
+                    checksum=PROJECT_FULL_PAGE_CLEANING_LEDGER_CHECKSUM,
+                    missing_status=ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED,
+                )
+                if ledger not in {
+                    ProjectOpenStatus.READY,
+                    ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED,
+                }:
+                    return ProjectOpenResult(status=ledger, project_id=project_id, project_record=project_record)
+                # Begin before CREATE statements so a failed additive v3 upgrade
+                # cannot leave durable tables without its migration marker.
+                connection.execute("BEGIN IMMEDIATE")
                 initialize_repository_core_schema(connection)
                 _ensure_migration(
                     connection,
                     version=PROJECT_VISUAL_CONTRACT_VERSION,
                     checksum=PROJECT_VISUAL_CONTRACT_CHECKSUM,
                 )
+                _ensure_migration(
+                    connection,
+                    version=PROJECT_FULL_PAGE_CLEANING_LEDGER_VERSION,
+                    checksum=PROJECT_FULL_PAGE_CLEANING_LEDGER_CHECKSUM,
+                )
                 connection.execute(
                     "UPDATE project_metadata SET project_schema_version = ?",
-                    (PROJECT_VISUAL_CONTRACT_VERSION,),
+                    (PROJECT_FULL_PAGE_CLEANING_LEDGER_VERSION,),
                 )
         except sqlite3.DatabaseError:
             return ProjectOpenResult(status=ProjectOpenStatus.PROJECT_MIGRATION_FAILED, project_id=project_id, project_record=project_record)
@@ -413,6 +478,10 @@ class ProjectRepositories:
             project_id=project_id,
         )
         self.visual_contract = VisualContractRepository(
+            project_db_path=project_db_path,
+            project_id=project_id,
+        )
+        self.full_page_cleaning_ledger = FullPageCleaningLedgerRepository(
             project_db_path=project_db_path,
             project_id=project_id,
         )
@@ -519,6 +588,11 @@ def _initialize_project_database(
             version=PROJECT_VISUAL_CONTRACT_VERSION,
             checksum=PROJECT_VISUAL_CONTRACT_CHECKSUM,
         )
+        _ensure_migration(
+            connection,
+            version=PROJECT_FULL_PAGE_CLEANING_LEDGER_VERSION,
+            checksum=PROJECT_FULL_PAGE_CLEANING_LEDGER_CHECKSUM,
+        )
         _require_ready_migration(
             connection,
             version=PROJECT_BASELINE_VERSION,
@@ -539,7 +613,7 @@ def _initialize_project_database(
             )
             VALUES (?, ?, ?, ?, NULL)
             """,
-            (project_id, PROJECT_VISUAL_CONTRACT_VERSION, workspace_identity, now),
+            (project_id, PROJECT_FULL_PAGE_CLEANING_LEDGER_VERSION, workspace_identity, now),
         )
 
 
@@ -642,12 +716,30 @@ def _project_migration_status(connection: sqlite3.Connection) -> ProjectOpenStat
     )
     if base_status is not ProjectOpenStatus.READY:
         return base_status
-    return _verify_migration(
+    visual_status = _verify_migration(
         connection,
         version=PROJECT_VISUAL_CONTRACT_VERSION,
         checksum=PROJECT_VISUAL_CONTRACT_CHECKSUM,
         missing_status=ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED,
     )
+    if visual_status is not ProjectOpenStatus.READY:
+        return visual_status
+    return _verify_migration(
+        connection,
+        version=PROJECT_FULL_PAGE_CLEANING_LEDGER_VERSION,
+        checksum=PROJECT_FULL_PAGE_CLEANING_LEDGER_CHECKSUM,
+        missing_status=ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED,
+    )
+
+
+def _project_metadata_version_status(version: str) -> ProjectOpenStatus:
+    if version not in {
+        PROJECT_BASELINE_VERSION,
+        PROJECT_VISUAL_CONTRACT_VERSION,
+        PROJECT_FULL_PAGE_CLEANING_LEDGER_VERSION,
+    }:
+        return ProjectOpenStatus.NEWER_INCOMPATIBLE_SCHEMA
+    return ProjectOpenStatus.READY
 
 
 def _load_migrations(connection: sqlite3.Connection) -> tuple[MigrationRecord, ...]:

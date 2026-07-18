@@ -45,6 +45,7 @@ def test_project_creation_initializes_project_db_identity_and_ready_repositories
     assert [migration.version for migration in opened.project_migrations] == [
         "project_baseline_v1",
         "project_visual_contract_v2",
+        "project_full_page_cleaning_ledger_v3",
     ]
     assert opened.repositories().identity.get_metadata().project_id == created.project_id
 
