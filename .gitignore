@@ -222,6 +222,7 @@ __marimo__/
 
 # Repository-local process artifacts
 log/
+docs/reader/
 docs/design/*/PLAN.md
 docs/design/*/DECISION_LOG.md
 docs/design/*/open-questions.md
