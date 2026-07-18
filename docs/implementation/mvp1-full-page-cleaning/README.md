@@ -7,8 +7,8 @@
 | Slice | 状态 | 说明 |
 | --- | --- | --- |
 | [01——台账基础](slices/01-ledger-foundation/README.md) | `ACCEPTED_WITH_RECORDED_ENVIRONMENT_LIMITS` | v3 migration、ledger persistence、recovery 和边界测试已完成 |
-| [02——组合、验证与原子验收](slices/02-composition-validation-acceptance/README.md) | `IN_PROGRESS` | 先应用 acceptance completion migration，再实现唯一允许更新 active cleaned pointer 的原子路径 |
-| [03——case-71 收口与 case-72 泛化](slices/03-real-page-closure/README.md) | `NOT_STARTED` | 尚未运行真实整页收口和泛化 Gate |
+| [02——组合、验证与原子验收](slices/02-composition-validation-acceptance/README.md) | `ACCEPTED_WITH_RECORDED_ENVIRONMENT_LIMITS` | completion migration、组合、验证、issue lifecycle、原子验收和 stale repair 已完成 |
+| [03——case-71 收口与 case-72 泛化](slices/03-real-page-closure/README.md) | `NEXT_ALLOWED_SLICE` | 尚未运行真实整页收口和泛化 Gate |
 
 `FULL_INTEGRATION_SUITE = ENVIRONMENT_BLOCKED`，原因是当前 Windows/UNC 测试环境缺少 `cv2`，并存在 SQLite 文件句柄锁。该项不是 PASS。
 

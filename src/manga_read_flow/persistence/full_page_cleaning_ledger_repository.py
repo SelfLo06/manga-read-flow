@@ -974,6 +974,269 @@ def initialize_full_page_cleaning_ledger_schema(connection: sqlite3.Connection) 
     )
 
 
+def initialize_full_page_cleaning_acceptance_schema(
+    connection: sqlite3.Connection,
+) -> None:
+    """Create Slice 2 completion facts in its own immutable migration."""
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS combined_cleaning_candidates (
+            combined_cleaning_candidate_id TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL,
+            page_cleaning_run_id TEXT NOT NULL,
+            source_artifact_id TEXT NOT NULL,
+            source_hash TEXT NOT NULL,
+            combined_artifact_id TEXT NOT NULL,
+            combined_hash TEXT NOT NULL,
+            combined_delta_artifact_id TEXT NOT NULL,
+            combined_delta_hash TEXT NOT NULL,
+            composition_config_hash TEXT NOT NULL,
+            member_set_fingerprint TEXT NOT NULL,
+            status TEXT NOT NULL,
+            accepted_validation_record_id TEXT,
+            supersedes_candidate_id TEXT,
+            stale_by_dependency_fingerprint TEXT,
+            created_at TEXT NOT NULL,
+            accepted_at TEXT,
+            UNIQUE(project_id, page_cleaning_run_id, member_set_fingerprint),
+            CHECK(status IN ('official_unselected', 'validated', 'accepted', 'stale')),
+            FOREIGN KEY(page_cleaning_run_id)
+                REFERENCES page_cleaning_runs(page_cleaning_run_id),
+            FOREIGN KEY(supersedes_candidate_id)
+                REFERENCES combined_cleaning_candidates(combined_cleaning_candidate_id)
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS combined_cleaning_candidate_members (
+            combined_cleaning_candidate_id TEXT NOT NULL,
+            instance_cleaning_result_id TEXT NOT NULL,
+            project_id TEXT NOT NULL,
+            page_cleaning_run_id TEXT NOT NULL,
+            bubble_instance_revision_id TEXT NOT NULL,
+            composition_key TEXT NOT NULL,
+            actual_changed_artifact_id TEXT NOT NULL,
+            actual_changed_hash TEXT NOT NULL,
+            selection_status TEXT NOT NULL,
+            accepted_at TEXT,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY(combined_cleaning_candidate_id, instance_cleaning_result_id),
+            UNIQUE(combined_cleaning_candidate_id, bubble_instance_revision_id),
+            UNIQUE(combined_cleaning_candidate_id, composition_key),
+            CHECK(selection_status IN ('proposed', 'accepted', 'stale')),
+            FOREIGN KEY(combined_cleaning_candidate_id)
+                REFERENCES combined_cleaning_candidates(combined_cleaning_candidate_id),
+            FOREIGN KEY(instance_cleaning_result_id)
+                REFERENCES instance_cleaning_results(instance_cleaning_result_id)
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS page_cleaning_validation_records (
+            page_cleaning_validation_record_id TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL,
+            page_cleaning_run_id TEXT NOT NULL,
+            combined_cleaning_candidate_id TEXT NOT NULL,
+            validation_fingerprint TEXT NOT NULL,
+            status TEXT NOT NULL,
+            selection_status TEXT NOT NULL,
+            inventory_complete INTEGER NOT NULL,
+            dispositions_unique INTEGER NOT NULL,
+            missing_attribution_count INTEGER NOT NULL,
+            duplicate_attribution_count INTEGER NOT NULL,
+            pairwise_overlap_pixel_count INTEGER NOT NULL,
+            wrong_instance_write_pixel_count INTEGER NOT NULL,
+            outside_safe_pixel_count INTEGER NOT NULL,
+            protected_pixel_count INTEGER NOT NULL,
+            uncertainty_pixel_count INTEGER NOT NULL,
+            boundary_damage_pixel_count INTEGER NOT NULL,
+            residue_pixel_count INTEGER NOT NULL,
+            combined_delta_matches_member_union INTEGER NOT NULL,
+            source_integrity_valid INTEGER NOT NULL,
+            combined_integrity_valid INTEGER NOT NULL,
+            dependencies_fresh INTEGER NOT NULL,
+            evidence_artifact_id TEXT,
+            overlap_evidence_artifact_id TEXT,
+            wrong_instance_evidence_artifact_id TEXT,
+            validator_summary TEXT NOT NULL,
+            stale_by_dependency_fingerprint TEXT,
+            created_at TEXT NOT NULL,
+            accepted_at TEXT,
+            UNIQUE(project_id, combined_cleaning_candidate_id, validation_fingerprint),
+            CHECK(status IN ('pass', 'fail', 'stale')),
+            CHECK(selection_status IN ('recorded', 'accepted', 'stale')),
+            CHECK(inventory_complete IN (0, 1)),
+            CHECK(dispositions_unique IN (0, 1)),
+            CHECK(combined_delta_matches_member_union IN (0, 1)),
+            CHECK(source_integrity_valid IN (0, 1)),
+            CHECK(combined_integrity_valid IN (0, 1)),
+            CHECK(dependencies_fresh IN (0, 1)),
+            FOREIGN KEY(page_cleaning_run_id)
+                REFERENCES page_cleaning_runs(page_cleaning_run_id),
+            FOREIGN KEY(combined_cleaning_candidate_id)
+                REFERENCES combined_cleaning_candidates(combined_cleaning_candidate_id)
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS cleaning_quality_issue_relations (
+            cleaning_quality_issue_relation_id TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL,
+            issue_id TEXT NOT NULL,
+            relation_type TEXT NOT NULL,
+            page_cleaning_run_id TEXT,
+            cleaning_inventory_item_id TEXT,
+            instance_cleaning_result_id TEXT,
+            combined_cleaning_candidate_id TEXT,
+            page_cleaning_validation_record_id TEXT,
+            correction_reservation_id TEXT,
+            workflow_decision_id TEXT,
+            created_at TEXT NOT NULL,
+            CHECK(
+                (page_cleaning_run_id IS NOT NULL) +
+                (cleaning_inventory_item_id IS NOT NULL) +
+                (instance_cleaning_result_id IS NOT NULL) +
+                (combined_cleaning_candidate_id IS NOT NULL) +
+                (page_cleaning_validation_record_id IS NOT NULL) +
+                (correction_reservation_id IS NOT NULL) +
+                (workflow_decision_id IS NOT NULL) = 1
+            ),
+            FOREIGN KEY(issue_id) REFERENCES quality_issues(issue_id),
+            FOREIGN KEY(page_cleaning_run_id)
+                REFERENCES page_cleaning_runs(page_cleaning_run_id),
+            FOREIGN KEY(cleaning_inventory_item_id)
+                REFERENCES page_cleaning_inventory_items(cleaning_inventory_item_id),
+            FOREIGN KEY(instance_cleaning_result_id)
+                REFERENCES instance_cleaning_results(instance_cleaning_result_id),
+            FOREIGN KEY(combined_cleaning_candidate_id)
+                REFERENCES combined_cleaning_candidates(combined_cleaning_candidate_id),
+            FOREIGN KEY(page_cleaning_validation_record_id)
+                REFERENCES page_cleaning_validation_records(page_cleaning_validation_record_id),
+            FOREIGN KEY(correction_reservation_id)
+                REFERENCES cleaning_correction_reservations(correction_reservation_id),
+            FOREIGN KEY(workflow_decision_id)
+                REFERENCES workflow_decisions(decision_id)
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS accepted_segment_cleaning_dispositions (
+            accepted_segment_cleaning_disposition_id TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL,
+            page_cleaning_run_id TEXT NOT NULL,
+            cleaning_inventory_item_id TEXT NOT NULL,
+            instance_cleaning_result_id TEXT NOT NULL,
+            combined_cleaning_candidate_id TEXT NOT NULL,
+            page_cleaning_validation_record_id TEXT NOT NULL,
+            disposition_code TEXT NOT NULL,
+            dependency_fingerprint TEXT NOT NULL,
+            stale_by_dependency_fingerprint TEXT,
+            created_at TEXT NOT NULL,
+            UNIQUE(project_id, cleaning_inventory_item_id),
+            CHECK(disposition_code = 'CLEANED_PASS'),
+            FOREIGN KEY(page_cleaning_run_id)
+                REFERENCES page_cleaning_runs(page_cleaning_run_id),
+            FOREIGN KEY(cleaning_inventory_item_id)
+                REFERENCES page_cleaning_inventory_items(cleaning_inventory_item_id),
+            FOREIGN KEY(instance_cleaning_result_id)
+                REFERENCES instance_cleaning_results(instance_cleaning_result_id),
+            FOREIGN KEY(combined_cleaning_candidate_id)
+                REFERENCES combined_cleaning_candidates(combined_cleaning_candidate_id),
+            FOREIGN KEY(page_cleaning_validation_record_id)
+                REFERENCES page_cleaning_validation_records(page_cleaning_validation_record_id)
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS page_cleaning_acceptances (
+            page_cleaning_acceptance_id TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL,
+            page_cleaning_run_id TEXT NOT NULL,
+            combined_cleaning_candidate_id TEXT NOT NULL,
+            page_cleaning_validation_record_id TEXT NOT NULL,
+            cleaned_artifact_id TEXT NOT NULL,
+            workflow_decision_id TEXT NOT NULL,
+            task_id TEXT NOT NULL,
+            idempotency_key TEXT NOT NULL,
+            status TEXT NOT NULL,
+            accepted_at TEXT NOT NULL,
+            stale_at TEXT,
+            UNIQUE(project_id, page_cleaning_run_id),
+            UNIQUE(project_id, idempotency_key),
+            CHECK(status IN ('accepted', 'stale')),
+            FOREIGN KEY(page_cleaning_run_id)
+                REFERENCES page_cleaning_runs(page_cleaning_run_id),
+            FOREIGN KEY(combined_cleaning_candidate_id)
+                REFERENCES combined_cleaning_candidates(combined_cleaning_candidate_id),
+            FOREIGN KEY(page_cleaning_validation_record_id)
+                REFERENCES page_cleaning_validation_records(page_cleaning_validation_record_id),
+            FOREIGN KEY(workflow_decision_id)
+                REFERENCES workflow_decisions(decision_id),
+            FOREIGN KEY(task_id) REFERENCES processing_tasks(task_id)
+        )
+        """
+    )
+    connection.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_accepted_combined_candidate_per_run
+        ON combined_cleaning_candidates(project_id, page_cleaning_run_id)
+        WHERE status = 'accepted'
+        """
+    )
+    connection.execute(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_accepted_validation_per_candidate
+        ON page_cleaning_validation_records(combined_cleaning_candidate_id)
+        WHERE selection_status = 'accepted'
+        """
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS ix_combined_candidate_run_status "
+        "ON combined_cleaning_candidates(project_id, page_cleaning_run_id, status)"
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS ix_validation_candidate_status "
+        "ON page_cleaning_validation_records(project_id, combined_cleaning_candidate_id, status)"
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS ix_cleaning_issue_relation_issue_run "
+        "ON cleaning_quality_issue_relations(project_id, issue_id, page_cleaning_run_id)"
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS ix_accepted_cleaning_disposition_run "
+        "ON accepted_segment_cleaning_dispositions(project_id, page_cleaning_run_id)"
+    )
+    connection.execute(
+        """
+        CREATE TRIGGER IF NOT EXISTS trg_cleaned_pass_requires_accepted_member
+        BEFORE INSERT ON accepted_segment_cleaning_dispositions
+        BEGIN
+            SELECT CASE WHEN NOT EXISTS (
+                SELECT 1
+                FROM combined_cleaning_candidates c
+                JOIN combined_cleaning_candidate_members m
+                  ON m.combined_cleaning_candidate_id = c.combined_cleaning_candidate_id
+                JOIN page_cleaning_validation_records v
+                  ON v.page_cleaning_validation_record_id = NEW.page_cleaning_validation_record_id
+                WHERE c.combined_cleaning_candidate_id = NEW.combined_cleaning_candidate_id
+                  AND c.status = 'accepted'
+                  AND c.accepted_validation_record_id = NEW.page_cleaning_validation_record_id
+                  AND m.instance_cleaning_result_id = NEW.instance_cleaning_result_id
+                  AND m.selection_status = 'accepted'
+                  AND v.combined_cleaning_candidate_id = c.combined_cleaning_candidate_id
+                  AND v.status = 'pass'
+                  AND v.selection_status = 'accepted'
+            ) THEN RAISE(ABORT, 'CLEANED_PASS requires accepted combined member') END;
+        END
+        """
+    )
+
+
 __all__ = [
     "FullPageCleaningLedgerRepository",
     "CleaningInventoryItemDraft",
@@ -988,6 +1251,7 @@ __all__ = [
     "PageCleaningRunDraft",
     "PageCleaningRunSnapshot",
     "initialize_full_page_cleaning_ledger_schema",
+    "initialize_full_page_cleaning_acceptance_schema",
 ]
 
 

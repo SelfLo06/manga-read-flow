@@ -669,10 +669,16 @@ def test_case71_and_case72_inventory_fixture_uses_results_and_explicit_blockers_
         } == {70, 710}
 
 
-def test_slice1_repository_has_no_composition_or_active_pointer_write_boundary(tmp_path):
+def test_slice1_foundation_initializer_and_repository_keep_their_original_boundary(tmp_path):
     source = Path(
         "src/manga_read_flow/persistence/full_page_cleaning_ledger_repository.py"
     ).read_text(encoding="utf-8")
+    foundation_source = source.split(
+        "def initialize_full_page_cleaning_acceptance_schema", 1
+    )[0].split("def initialize_full_page_cleaning_ledger_schema", 1)[1]
+    repository_source = source.split(
+        "def initialize_full_page_cleaning_ledger_schema", 1
+    )[0]
     repositories = _ready_repositories(tmp_path)
     with sqlite3.connect(repositories.identity._project_db_path) as connection:
         tables = {
@@ -682,12 +688,14 @@ def test_slice1_repository_has_no_composition_or_active_pointer_write_boundary(t
             ).fetchall()
         }
 
-    assert "combined_cleaning_candidates" not in tables
-    assert "page_cleaning_validation_records" not in tables
-    assert "UPDATE pages SET active_cleaned_artifact_id" not in source
-    assert "accept_stage(" not in source
-    assert "manga_read_flow.providers" not in source
-    assert "ArtifactService" not in source
+    assert "combined_cleaning_candidates" in tables
+    assert "page_cleaning_validation_records" in tables
+    assert "combined_cleaning_candidates" not in foundation_source
+    assert "page_cleaning_validation_records" not in foundation_source
+    assert "UPDATE pages SET active_cleaned_artifact_id" not in repository_source
+    assert "accept_stage(" not in repository_source
+    assert "manga_read_flow.providers" not in repository_source
+    assert "ArtifactService" not in repository_source
     source_root = Path("src/manga_read_flow")
     non_persistence_sqlite_users = [
         path

@@ -71,6 +71,13 @@ from manga_read_flow.persistence.full_page_cleaning_ledger_repository import (
     SegmentCleaningDispositionDraft,
     initialize_full_page_cleaning_ledger_schema,
 )
+from manga_read_flow.persistence.full_page_cleaning_acceptance_repository import (
+    CleaningIssueRelationDraft,
+    FullPageCleaningAcceptanceCommand,
+    FullPageCleaningAcceptanceRepository,
+    FullPageCleaningBlockCommand,
+    FullPageCleaningTransactionOutcome,
+)
 
 
 class ProjectUnitOfWork:
@@ -88,6 +95,10 @@ class ProjectUnitOfWork:
             project_id=project_id,
         )
         self._full_page_cleaning_ledger = FullPageCleaningLedgerRepository(
+            project_db_path=project_db_path,
+            project_id=project_id,
+        )
+        self._full_page_cleaning_acceptance = FullPageCleaningAcceptanceRepository(
             project_db_path=project_db_path,
             project_id=project_id,
         )
@@ -226,6 +237,47 @@ class ProjectUnitOfWork:
             dependency_fingerprint=dependency_fingerprint,
         )
 
+    def accept_page_cleaning_atomically(
+        self, command: FullPageCleaningAcceptanceCommand
+    ) -> FullPageCleaningTransactionOutcome:
+        return self._full_page_cleaning_acceptance.accept_page_cleaning_atomically(command)
+
+    def validate_active_cleaned_pointer_eligibility(
+        self, command: FullPageCleaningAcceptanceCommand
+    ) -> FullPageCleaningTransactionOutcome:
+        return self._full_page_cleaning_acceptance.validate_active_cleaned_pointer_eligibility(
+            command
+        )
+
+    def persist_cleaning_issue_lifecycle(
+        self,
+        *,
+        issue_changes: tuple[IssueLifecycleChange, ...],
+        relations: tuple[CleaningIssueRelationDraft, ...],
+    ) -> None:
+        self._full_page_cleaning_acceptance.persist_cleaning_issue_lifecycle(
+            issue_changes=issue_changes,
+            relations=relations,
+        )
+
+    def block_page_cleaning_atomically(
+        self, command: FullPageCleaningBlockCommand
+    ) -> FullPageCleaningTransactionOutcome:
+        return self._full_page_cleaning_acceptance.block_page_cleaning_atomically(command)
+
+    def mark_cleaning_facts_stale_and_clear_active_pointer_atomically(
+        self,
+        *,
+        page_cleaning_run_id: str,
+        expected_active_cleaned_artifact_id: str,
+        dependency_fingerprint: str,
+    ) -> FullPageCleaningTransactionOutcome:
+        return self._full_page_cleaning_acceptance.mark_cleaning_facts_stale_and_clear_active_pointer_atomically(
+            page_cleaning_run_id=page_cleaning_run_id,
+            expected_active_cleaned_artifact_id=expected_active_cleaned_artifact_id,
+            dependency_fingerprint=dependency_fingerprint,
+        )
+
 
 def initialize_repository_core_schema(connection: sqlite3.Connection) -> None:
     initialize_content_state_schema(connection)
@@ -277,6 +329,10 @@ __all__ = [
     "CleaningResultDraft",
     "VisualContractRepository",
     "FullPageCleaningLedgerRepository",
+    "FullPageCleaningAcceptanceCommand",
+    "CleaningIssueRelationDraft",
+    "FullPageCleaningBlockCommand",
+    "FullPageCleaningTransactionOutcome",
     "CleaningInventoryItemDraft",
     "CleaningRecoveryLedger",
     "CorrectionChainDraft",

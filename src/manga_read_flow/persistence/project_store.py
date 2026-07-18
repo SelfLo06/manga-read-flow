@@ -29,6 +29,10 @@ from manga_read_flow.persistence.visual_contract_repository import (
 )
 from manga_read_flow.persistence.full_page_cleaning_ledger_repository import (
     FullPageCleaningLedgerRepository,
+    initialize_full_page_cleaning_acceptance_schema,
+)
+from manga_read_flow.persistence.full_page_cleaning_acceptance_repository import (
+    FullPageCleaningAcceptanceRepository,
 )
 
 
@@ -36,6 +40,7 @@ APP_BASELINE_VERSION = "app_baseline_v1"
 PROJECT_BASELINE_VERSION = "project_baseline_v1"
 PROJECT_VISUAL_CONTRACT_VERSION = "project_visual_contract_v2"
 PROJECT_FULL_PAGE_CLEANING_LEDGER_VERSION = "project_full_page_cleaning_ledger_v3"
+PROJECT_FULL_PAGE_CLEANING_ACCEPTANCE_VERSION = "project_full_page_cleaning_acceptance_v3"
 APP_BASELINE_CHECKSUM = sha256(
     b"app_baseline_v1:projects:schema_migrations"
 ).hexdigest()
@@ -48,6 +53,120 @@ PROJECT_VISUAL_CONTRACT_CHECKSUM = sha256(
 PROJECT_FULL_PAGE_CLEANING_LEDGER_CHECKSUM = sha256(
     b"project_full_page_cleaning_ledger_v3:run:inventory:disposition:instance_result:correction"
 ).hexdigest()
+PROJECT_FULL_PAGE_CLEANING_ACCEPTANCE_CHECKSUM = sha256(
+    b"project_full_page_cleaning_acceptance_v3:combined_candidate:normalized_membership:page_validation:quality_issue_relations:atomic_acceptance"
+).hexdigest()
+
+PROJECT_FULL_PAGE_CLEANING_REQUIRED_MIGRATIONS = (
+    (PROJECT_FULL_PAGE_CLEANING_LEDGER_VERSION, PROJECT_FULL_PAGE_CLEANING_LEDGER_CHECKSUM),
+    (
+        PROJECT_FULL_PAGE_CLEANING_ACCEPTANCE_VERSION,
+        PROJECT_FULL_PAGE_CLEANING_ACCEPTANCE_CHECKSUM,
+    ),
+)
+
+PROJECT_FULL_PAGE_CLEANING_REQUIRED_SCHEMA_OBJECTS = (
+    ("table", "page_cleaning_runs"),
+    ("table", "page_cleaning_inventory_items"),
+    ("table", "instance_cleaning_results"),
+    ("table", "instance_result_inventory_targets"),
+    ("table", "segment_cleaning_dispositions"),
+    ("table", "cleaning_correction_chains"),
+    ("table", "cleaning_correction_reservations"),
+    ("table", "combined_cleaning_candidates"),
+    ("table", "combined_cleaning_candidate_members"),
+    ("table", "page_cleaning_validation_records"),
+    ("table", "cleaning_quality_issue_relations"),
+    ("table", "accepted_segment_cleaning_dispositions"),
+    ("table", "page_cleaning_acceptances"),
+    ("index", "uq_accepted_combined_candidate_per_run"),
+    ("index", "uq_accepted_validation_per_candidate"),
+    ("trigger", "trg_cleaned_pass_requires_accepted_member"),
+)
+
+PROJECT_FULL_PAGE_CLEANING_REQUIRED_TABLE_COLUMNS = {
+    "combined_cleaning_candidates": {
+        "combined_cleaning_candidate_id",
+        "page_cleaning_run_id",
+        "combined_artifact_id",
+        "combined_hash",
+        "member_set_fingerprint",
+        "status",
+        "accepted_validation_record_id",
+    },
+    "combined_cleaning_candidate_members": {
+        "combined_cleaning_candidate_id",
+        "instance_cleaning_result_id",
+        "bubble_instance_revision_id",
+        "composition_key",
+        "actual_changed_artifact_id",
+        "actual_changed_hash",
+        "selection_status",
+    },
+    "page_cleaning_validation_records": {
+        "page_cleaning_validation_record_id",
+        "combined_cleaning_candidate_id",
+        "status",
+        "selection_status",
+        "missing_attribution_count",
+        "duplicate_attribution_count",
+        "pairwise_overlap_pixel_count",
+        "wrong_instance_write_pixel_count",
+        "combined_delta_matches_member_union",
+        "dependencies_fresh",
+    },
+    "cleaning_quality_issue_relations": {
+        "cleaning_quality_issue_relation_id",
+        "issue_id",
+        "page_cleaning_run_id",
+        "cleaning_inventory_item_id",
+        "instance_cleaning_result_id",
+        "combined_cleaning_candidate_id",
+        "page_cleaning_validation_record_id",
+        "correction_reservation_id",
+        "workflow_decision_id",
+    },
+    "accepted_segment_cleaning_dispositions": {
+        "accepted_segment_cleaning_disposition_id",
+        "cleaning_inventory_item_id",
+        "instance_cleaning_result_id",
+        "combined_cleaning_candidate_id",
+        "page_cleaning_validation_record_id",
+        "disposition_code",
+    },
+    "page_cleaning_acceptances": {
+        "page_cleaning_acceptance_id",
+        "page_cleaning_run_id",
+        "combined_cleaning_candidate_id",
+        "page_cleaning_validation_record_id",
+        "cleaned_artifact_id",
+        "idempotency_key",
+        "status",
+    },
+}
+
+PROJECT_FULL_PAGE_CLEANING_REQUIRED_SQL_FRAGMENTS = {
+    "combined_cleaning_candidates": (
+        "unique(project_id,page_cleaning_run_id,member_set_fingerprint)",
+        "check(statusin('official_unselected','validated','accepted','stale'))",
+    ),
+    "combined_cleaning_candidate_members": (
+        "unique(combined_cleaning_candidate_id,bubble_instance_revision_id)",
+        "unique(combined_cleaning_candidate_id,composition_key)",
+    ),
+    "page_cleaning_validation_records": (
+        "unique(project_id,combined_cleaning_candidate_id,validation_fingerprint)",
+        "check(statusin('pass','fail','stale'))",
+    ),
+    "accepted_segment_cleaning_dispositions": (
+        "check(disposition_code='cleaned_pass')",
+        "unique(project_id,cleaning_inventory_item_id)",
+    ),
+    "page_cleaning_acceptances": (
+        "unique(project_id,page_cleaning_run_id)",
+        "unique(project_id,idempotency_key)",
+    ),
+}
 
 
 class ProjectOpenStatus(str, Enum):
@@ -369,24 +488,47 @@ class AppStore:
                     ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED,
                 }:
                     return ProjectOpenResult(status=ledger, project_id=project_id, project_record=project_record)
-                # Begin before CREATE statements so a failed additive v3 upgrade
-                # cannot leave durable tables without its migration marker.
-                connection.execute("BEGIN IMMEDIATE")
-                initialize_repository_core_schema(connection)
-                _ensure_migration(
+                completion = _verify_migration(
                     connection,
-                    version=PROJECT_VISUAL_CONTRACT_VERSION,
-                    checksum=PROJECT_VISUAL_CONTRACT_CHECKSUM,
+                    version=PROJECT_FULL_PAGE_CLEANING_ACCEPTANCE_VERSION,
+                    checksum=PROJECT_FULL_PAGE_CLEANING_ACCEPTANCE_CHECKSUM,
+                    missing_status=ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED,
                 )
-                _ensure_migration(
-                    connection,
-                    version=PROJECT_FULL_PAGE_CLEANING_LEDGER_VERSION,
-                    checksum=PROJECT_FULL_PAGE_CLEANING_LEDGER_CHECKSUM,
-                )
-                connection.execute(
-                    "UPDATE project_metadata SET project_schema_version = ?",
-                    (PROJECT_FULL_PAGE_CLEANING_LEDGER_VERSION,),
-                )
+                if completion not in {
+                    ProjectOpenStatus.READY,
+                    ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED,
+                }:
+                    return ProjectOpenResult(status=completion, project_id=project_id, project_record=project_record)
+
+                if visual is ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED or ledger is ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED:
+                    connection.execute("BEGIN IMMEDIATE")
+                    initialize_repository_core_schema(connection)
+                    _ensure_migration(
+                        connection,
+                        version=PROJECT_VISUAL_CONTRACT_VERSION,
+                        checksum=PROJECT_VISUAL_CONTRACT_CHECKSUM,
+                    )
+                    _ensure_migration(
+                        connection,
+                        version=PROJECT_FULL_PAGE_CLEANING_LEDGER_VERSION,
+                        checksum=PROJECT_FULL_PAGE_CLEANING_LEDGER_CHECKSUM,
+                    )
+                    connection.execute(
+                        "UPDATE project_metadata SET project_schema_version = ?",
+                        (PROJECT_FULL_PAGE_CLEANING_LEDGER_VERSION,),
+                    )
+                    connection.commit()
+
+                if completion is ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED:
+                    connection.execute("BEGIN IMMEDIATE")
+                    initialize_full_page_cleaning_acceptance_schema(connection)
+                    _require_project_schema_shape(connection)
+                    _ensure_migration(
+                        connection,
+                        version=PROJECT_FULL_PAGE_CLEANING_ACCEPTANCE_VERSION,
+                        checksum=PROJECT_FULL_PAGE_CLEANING_ACCEPTANCE_CHECKSUM,
+                    )
+                    connection.commit()
         except sqlite3.DatabaseError:
             return ProjectOpenResult(status=ProjectOpenStatus.PROJECT_MIGRATION_FAILED, project_id=project_id, project_record=project_record)
         return self.open_project(project_id)
@@ -482,6 +624,10 @@ class ProjectRepositories:
             project_id=project_id,
         )
         self.full_page_cleaning_ledger = FullPageCleaningLedgerRepository(
+            project_db_path=project_db_path,
+            project_id=project_id,
+        )
+        self.full_page_cleaning_acceptance = FullPageCleaningAcceptanceRepository(
             project_db_path=project_db_path,
             project_id=project_id,
         )
@@ -615,6 +761,16 @@ def _initialize_project_database(
             """,
             (project_id, PROJECT_FULL_PAGE_CLEANING_LEDGER_VERSION, workspace_identity, now),
         )
+        connection.commit()
+
+        connection.execute("BEGIN IMMEDIATE")
+        initialize_full_page_cleaning_acceptance_schema(connection)
+        _require_project_schema_shape(connection)
+        _ensure_migration(
+            connection,
+            version=PROJECT_FULL_PAGE_CLEANING_ACCEPTANCE_VERSION,
+            checksum=PROJECT_FULL_PAGE_CLEANING_ACCEPTANCE_CHECKSUM,
+        )
 
 
 def _connect(path: Path) -> sqlite3.Connection:
@@ -724,12 +880,53 @@ def _project_migration_status(connection: sqlite3.Connection) -> ProjectOpenStat
     )
     if visual_status is not ProjectOpenStatus.READY:
         return visual_status
-    return _verify_migration(
+    ledger_status = _verify_migration(
         connection,
         version=PROJECT_FULL_PAGE_CLEANING_LEDGER_VERSION,
         checksum=PROJECT_FULL_PAGE_CLEANING_LEDGER_CHECKSUM,
         missing_status=ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED,
     )
+    if ledger_status is not ProjectOpenStatus.READY:
+        return ledger_status
+    completion_status = _verify_migration(
+        connection,
+        version=PROJECT_FULL_PAGE_CLEANING_ACCEPTANCE_VERSION,
+        checksum=PROJECT_FULL_PAGE_CLEANING_ACCEPTANCE_CHECKSUM,
+        missing_status=ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED,
+    )
+    if completion_status is not ProjectOpenStatus.READY:
+        return completion_status
+    return _project_schema_shape_status(connection)
+
+
+def _project_schema_shape_status(connection: sqlite3.Connection) -> ProjectOpenStatus:
+    for object_type, name in PROJECT_FULL_PAGE_CLEANING_REQUIRED_SCHEMA_OBJECTS:
+        row = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = ? AND name = ?",
+            (object_type, name),
+        ).fetchone()
+        if row is None:
+            return ProjectOpenStatus.PROJECT_MIGRATION_FAILED
+    for table, required_columns in PROJECT_FULL_PAGE_CLEANING_REQUIRED_TABLE_COLUMNS.items():
+        actual_columns = {
+            row["name"] for row in connection.execute(f"PRAGMA table_info({table})").fetchall()
+        }
+        if not required_columns.issubset(actual_columns):
+            return ProjectOpenStatus.PROJECT_MIGRATION_FAILED
+    for table, fragments in PROJECT_FULL_PAGE_CLEANING_REQUIRED_SQL_FRAGMENTS.items():
+        row = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+            (table,),
+        ).fetchone()
+        normalized_sql = "".join(row["sql"].lower().split()) if row and row["sql"] else ""
+        if any(fragment not in normalized_sql for fragment in fragments):
+            return ProjectOpenStatus.PROJECT_MIGRATION_FAILED
+    return ProjectOpenStatus.READY
+
+
+def _require_project_schema_shape(connection: sqlite3.Connection) -> None:
+    if _project_schema_shape_status(connection) is not ProjectOpenStatus.READY:
+        raise sqlite3.OperationalError("Full-page Cleaning v3 schema shape is invalid.")
 
 
 def _project_metadata_version_status(version: str) -> ProjectOpenStatus:
