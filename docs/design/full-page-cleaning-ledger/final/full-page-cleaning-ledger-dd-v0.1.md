@@ -82,7 +82,7 @@ acceptance predicate：run completed and inventory frozen; all targets have exac
 
 ## 9. 迁移、case 映射与实施顺序
 
-采用 `project_full_page_cleaning_ledger_v3` additive migration；无 semantic backfill，旧 Spike E/F 只读 legacy evidence，old project 迁移失败即 workflow blocked，无 auto downgrade。详见 [migration decision](migration-decision.md) 与 [schema outline](schema-outline.md)。
+逻辑 schema 采用 `project_full_page_cleaning_ledger_v3`；无 semantic backfill，旧 Spike E/F 只读 legacy evidence，old project 迁移失败即 workflow blocked，无 auto downgrade。物理实施分为不可变的 foundation record `project_full_page_cleaning_ledger_v3` 与 completion record `project_full_page_cleaning_acceptance_v3`，二者共同构成完整 v3；`project_metadata.project_schema_version` 仍保持 v3。详见 [migration decision](migration-decision.md)、[migration staging amendment v0.1.1](migration-staging-amendment-v0.1.1.md) 与 [schema outline](schema-outline.md)。
 
 case-71 在新 ledger 中为 6 inventory；两个 g002 `CLEANED_PASS` 可记录，其余四项为 blocking `MISSING_REQUIRED_EVIDENCE`，所以不能 pointer accept。case-72 明确表达 710/70 unsafe、g003 review 和缺失项，禁止静默丢弃或强制 E1。
 
