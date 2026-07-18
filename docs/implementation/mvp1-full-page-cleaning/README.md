@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | [01——台账基础](slices/01-ledger-foundation/README.md) | `ACCEPTED_WITH_RECORDED_ENVIRONMENT_LIMITS` | v3 migration、ledger persistence、recovery 和边界测试已完成 |
 | [02——组合、验证与原子验收](slices/02-composition-validation-acceptance/README.md) | `ACCEPTED` | completion migration、组合、验证、issue lifecycle、原子验收和 stale repair 已完成；Linux 全量 integration 已通过 |
-| [03——case-71 收口与 case-72 泛化](slices/03-real-page-closure/README.md) | `NEXT_ALLOWED_SLICE` | 尚未运行真实整页收口和泛化 Gate |
+| [03——case-71 收口与 case-72 泛化](slices/03-real-page-closure/README.md) | `IN_PROGRESS` | case-71 已接受；case-72 Checkpoint A 已修正 g003 eligibility，但 g002/g004 等待独立 physical-boundary Spike |
 
 Slice 2 已在 Linux `manga-read-flow` Conda 环境重验：`FULL_INTEGRATION_SUITE = PASS`（`117 passed`）。Slice 1 的历史 Gate 保持原记录，不因后续环境验证而改写。
 
