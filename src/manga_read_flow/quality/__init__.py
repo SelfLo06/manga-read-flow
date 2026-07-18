@@ -135,6 +135,7 @@ def _cleaning_validation_issues(check_input: QualityCheckInput) -> tuple[IssueDr
         ("uncertainty_damage", "structure_damage", "uncertainty_structure_damage", "cleaning.structure_damage"),
         ("background_inconsistency", "background_inconsistency", "cleaning_background_inconsistency", "cleaning.background_inconsistency"),
         ("ordinary_bubble_false_exclusion", "ordinary_bubble_false_exclusion", "cleaning_eligibility_unexplained", "cleaning.eligibility_exclusion"),
+        ("page_scope_incomplete", "cleaning_scope_incomplete", "cleaning_scope_incomplete", "cleaning.scope_incomplete"),
     )
     drafts = [
         _draft(

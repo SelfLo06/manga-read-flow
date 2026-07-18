@@ -48,6 +48,7 @@ class CleaningSliceInstanceInput:
     eligibility: str
     required_safe_completeness: str
     reason_code: str
+    execute_cleaner: bool = True
 
 
 @dataclass(frozen=True)
@@ -62,6 +63,7 @@ class SinglePageCleaningCommand:
     work_root: Path
     instances: tuple[CleaningSliceInstanceInput, ...]
     task_id: str | None = None
+    page_scope_complete: bool = True
 
 
 @dataclass(frozen=True)
@@ -175,6 +177,7 @@ class SinglePageCleaningService:
             for item in command.instances
             if item.eligibility == "E1"
             and item.required_safe_completeness == "COMPLETE"
+            and item.execute_cleaner
         )
         if len(executable) != 1:
             raise ValueError("The bounded Cleaning slice requires exactly one executable E1 instance.")
@@ -273,6 +276,7 @@ class SinglePageCleaningService:
             and item.eligibility in {"E1", "E2", "E3", "REVIEW"}
         )
         issue_flags["required_support_incomplete"] = bool(incomplete_text_block_ids)
+        issue_flags["page_scope_incomplete"] = not command.page_scope_complete
         issue_flags["incomplete_text_block_ids"] = incomplete_text_block_ids
         issue_flags["primary_evidence_artifact_id"] = evidence_artifact.artifact_id
         phase = perf_counter()

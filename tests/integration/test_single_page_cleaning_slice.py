@@ -73,6 +73,28 @@ def test_complete_slice_switches_active_pointer_and_reuses_valid_pass(tmp_path):
     assert len(repositories.visual_contract.list_results(page_id="case-test")) == 1
 
 
+def test_partial_page_scope_blocks_selected_output_while_one_e1_is_revalidated(tmp_path):
+    project, repositories, artifact_service, source, original = _page(tmp_path, "partial")
+    retained = _instance(tmp_path, "retained", bbox=(12, 12, 20, 20), complete=True)
+    corrected = _instance(tmp_path, "corrected", bbox=(40, 40, 48, 48), complete=True)
+    retained = retained.__class__(**{**retained.__dict__, "execute_cleaner": False})
+    for order, item in enumerate((retained, corrected), 1):
+        repositories.content_state.create_text_block(
+            text_block_id=item.source_text_block_id,
+            page_id="case-test",
+            reading_order=order,
+            ocr_status="done",
+            translation_status="done",
+        )
+    command = _command(tmp_path, source, original.artifact_id, (retained, corrected), "partial")
+    command = command.__class__(**{**command.__dict__, "page_scope_complete": False})
+    result = _service(project, repositories, artifact_service).run(command)
+    assert result.provider_called is True
+    assert result.decision == "block"
+    assert result.active_cleaned_artifact_id is None
+    assert repositories.content_state.get_page("case-test").active_cleaned_artifact_id is None
+
+
 def _page(tmp_path: Path, suffix: str):
     source = tmp_path / f"source-{suffix}.png"
     image = np.full((64, 64, 3), 255, dtype=np.uint8)
