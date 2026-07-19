@@ -14,7 +14,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-RUNNER_PATH = ROOT / "tools/mvp1/run_full_page_cleaning_slice3.py"
+RUNNER_PATH = ROOT / "tools/experiments/150-cleaning/mvp1/run_full_page_cleaning_slice3.py"
 
 
 @pytest.fixture(scope="module")

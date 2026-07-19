@@ -220,50 +220,15 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# Repository-local process artifacts
+# Repository-local process artifacts and agent state
 log/
-docs/reader/
-docs/design/*/PLAN.md
-docs/design/*/DECISION_LOG.md
-docs/design/*/open-questions.md
-docs/design/*/proposals/
-docs/design/*/reviews/
-docs/implementation/*/PLAN.md
-docs/implementation/*/reviews/
-
-#codex
-
-# Local-only Cleaning Benchmark Pilot review images and candidate masks.
-artifacts/cleaning-benchmark-pilot/
-.codex
-AGENTS.md
-# Local sample images
-local_samples/
-
-# Real Tool Spike local tools and tests
-tools/generate_synthetic_samples.py
-tools/build_detection_ocr_ground_truth.py
-tools/validate_detection_ocr_ground_truth.py
-tests/unit/test_generate_synthetic_samples.py
-tests/unit/test_build_detection_ocr_ground_truth.py
-tests/unit/test_validate_detection_ocr_ground_truth.py
-tools/spikes/detection_ocr/
-tests/unit/test_detection_ocr_spike.py
-
-RealToolSpike总规划.md
-
-.env.page-translation.local
-
-data/
 artifacts/
+.tmp/
+.codex/
+.claude/
+.idea/
+.env.*.local
 
-# Archived YOLO model-selection experiment inputs and outputs.  The only
-# versioned record of this retired experiment is its final decision report.
-data/local/yolo-model-selection/
-.tmp/yolo-model-selection/
-
-# Local-only dataset-audit derivative cache and debug visualizations
-artifacts/
-.tmp/dataset-audit/
-
-docs/spikes/cleaning-dataset-audit
+# Local data is never committed; keep its tracked policy document visible.
+data/*
+!data/README.md

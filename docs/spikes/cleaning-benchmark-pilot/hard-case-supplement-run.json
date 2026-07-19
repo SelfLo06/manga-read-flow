@@ -1,8 +1,0 @@
-{
-  "failure_reason": [
-    "cross_collection_duplicates",
-    "cross_container_merge",
-    "not_text_positive_misclassification"
-  ],
-  "status": "failed"
-}
