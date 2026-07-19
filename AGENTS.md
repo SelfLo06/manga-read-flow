@@ -126,6 +126,68 @@ Spike 可以探索替代方案，但：
 
 只描述“最终输出应该是什么”不足以开始实现。
 
+## 执行自检 Harness
+
+实现任务必须经过三个检查点。
+
+### Checkpoint A — Preflight
+
+修改文件前确认：
+
+- Task Mode；
+- Canonical Processing Path；
+- Authoritative Inputs / Source of Truth；
+- Required Reuse；
+- Allowed Extension Point；
+- Forbidden Bypasses；
+- 正式入口和现有相关测试。
+
+结果只能是：
+
+- `PROCEED`
+- `STOP_DESIGN_GAP`
+- `STOP_SCOPE_CONFLICT`
+- `STOP_WORKTREE_CONFLICT`
+
+未得到 `PROCEED` 不得修改文件。
+
+### Checkpoint B — Drift Check
+
+完成首个可运行实现后检查：
+
+- 是否新增平行 generator、pipeline 或 fallback；
+- 是否从弱证据生成新的权威结果；
+- 是否绕过正式 Service、Workflow、Artifact 或 Check；
+- 是否只验证 helper，尚未接入正式入口；
+- 是否改变了未授权合同、状态或 source of truth；
+- 是否因实现困难而改变了原问题。
+
+发现任一偏航时停止，不得继续用补丁掩盖设计缺口。
+
+### Checkpoint C — Conformance Review
+
+交付前必须提供证据：
+
+- 实际复用的正式链路；
+- 修改的 extension point；
+- 新增类、函数和文件的职责；
+- 是否新增机制；
+- 是否改变 source of truth；
+- 正式入口集成测试；
+- 相关回归测试；
+- diff 是否超出范围。
+
+以下任一情况存在时不得声明完成：
+
+- 正式入口未调用本次实现；
+- 新增未经授权的平行机制；
+- 改变 source of truth；
+- 绕过 Quality Check 或 Workflow；
+- 只有 helper 或临时 runner 测试；
+- 实际需要 DESIGN_CHANGE，但未获得授权。
+
+自我声明不能替代调用链、测试和 diff 证据。
+
 ### 禁止旁路
 
 不得为了更快获得局部结果而：
