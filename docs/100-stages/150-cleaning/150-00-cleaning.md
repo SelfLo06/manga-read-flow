@@ -27,6 +27,10 @@ Cleaner 不决定：
 
 当前主线处于 **M1 — Single-Page Visual Closure**。
 
+Cleaning 当前为 `PRODUCT_PARTIAL`。产品代码已有 real `BorderSampledFillCleanerProvider`、Cleaning validation/Check、ArtifactService 登记、Workflow decision 和 accepted cleaned artifact 路径；这些职责本身是真实实现，不是 FakeProvider 生命周期。
+
+但是当前正式运行仍依赖调用方提供 VisualContract、BubbleInstance、required/protected/uncertainty/safe-edit masks 或等价输入。集成测试和保留 runner 会手工构造这些输入；它们尚未来自正式 Physical Boundary producer、accepted evidence revision 和 exact VisualContract binding。因此 real Cleaner 成立不等于用户 Cleaning 产品链已关闭。
+
 现有实验已经证明部分受限机制可运行，包括：
 
 - topology 与实例归属；
@@ -35,6 +39,8 @@ Cleaner 不决定：
 - 部分页面和容器上的 fail-closed 行为。
 
 这些结果尚未证明通用单页 Cleaning 能力。
+
+当前暂停新增脱离正式产品上游的横向实验，优先沿用户产品路径关闭更早断边；这不否定或删除既有 Cleaning 实验、`NO_GO` 和受限算法证据。后续必要实验必须声明 Productization Exit，并回到同一正式 extension point。
 
 当前 physical-boundary capability 仍未关闭：
 

@@ -10,6 +10,8 @@ QualityCheckService 负责检测与 root-stage attribution；WorkflowLoopEngine 
 
 人工 Review 可以确认、否决或修正候选，但不能伪造算法证据。OCR/译文编辑创建新版本；旧版本和 attempt 保留。依赖图将下游关联、Cleaning、Typesetting 与 Export 标记 stale，随后只重算受影响对象。active pointer 是当前有效版本的唯一选择机制。
 
+以上是目标合同，不表示完整产品路径已经实现。当前 Grouping replacement、immutable stale facts、pointer CAS 和 recovery repair 较完整；普通 OCR/Translation edit application entry 尚未实现或未由正式入口证明，OCR/Translation replacement 后完整、原子的下游 pointer 清理也尚未证明。后续实现必须通过正式 application entry、同一 UoW acceptance/stale transaction 和 recovery 测试关闭该偏离，不能靠 UI 直写 Repository 或完整 rerun 掩盖中间状态。
+
 ## Recovery 与 export readiness
 
 恢复从已提交数据库状态出发，校验 artifact 路径/hash，识别运行中断、部分写入和未接受候选。失败 attempt artifact 默认保留；清理只由 ArtifactService 按 retention policy 执行。
