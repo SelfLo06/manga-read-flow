@@ -47,7 +47,12 @@ def test_project_creation_initializes_project_db_identity_and_ready_repositories
         "project_visual_contract_v2",
         "project_full_page_cleaning_ledger_v3",
         "project_full_page_cleaning_acceptance_v3",
-    ]
+        "project_detection_evidence_v4",
+        "project_grouping_candidate_v5",
+        "project_grouping_check_v6",
+            "project_grouping_acceptance_v7",
+            "project_grouping_stale_v8",
+        ]
     assert opened.repositories().identity.get_metadata().project_id == created.project_id
 
 

@@ -27,6 +27,8 @@ from manga_read_flow.persistence.content_state_repository import (
     ActiveTranslationInput,
     BatchSnapshot,
     ContentStateRepository,
+    ExactActiveOcrDependency,
+    ExactOcrDependenciesNotReadyError,
     GlossaryRepository,
     ImportPageStateCommand,
     ImportPageStateOutcome,
@@ -41,6 +43,7 @@ from manga_read_flow.persistence.workflow_execution_repository import (
     AttemptSnapshot,
     ProcessingProfileSnapshot,
     ProcessingTaskSnapshot,
+    QualityIssueSnapshot,
     QualityIssueRepository,
     ReadinessQueryRepository,
     ReadinessSnapshot,
@@ -50,8 +53,44 @@ from manga_read_flow.persistence.workflow_execution_repository import (
     ToolRunStart,
     UnitOfWorkOutcome,
     WorkflowExecutionRepository,
+    WorkflowDecisionSnapshot,
     initialize_workflow_execution_schema,
 )
+from manga_read_flow.persistence.detection_evidence_repository import (
+    AcceptedDetectionEvidenceSetSnapshot,
+    DetectionEvidenceRepository,
+    initialize_detection_evidence_schema,
+)
+from manga_read_flow.persistence.grouping_snapshot_repository import (
+    FrozenGroupingEvidenceSnapshot,
+    GroupingCandidateMaterializationOutcome,
+    GroupingGenerationRunDraft,
+    GroupingSnapshotOcrDependencyDraft,
+    GroupingSnapshotRepository,
+    FrozenGroupingEvidenceSnapshotDraft,
+    initialize_grouping_snapshot_schema,
+)
+from manga_read_flow.persistence.grouping_check_repository import (
+    GroupingCheckCommitOutcome,
+    GroupingCheckExecutionDraft,
+    GroupingCheckRepository,
+    initialize_grouping_check_schema,
+)
+from manga_read_flow.persistence.grouping_acceptance_repository import (
+    CurrentGroupingSnapshot,
+    ExpectedGroupingIssue,
+    GroupingAcceptanceRepository,
+    GroupingAcceptanceSnapshot,
+    GroupingDecisionContextDraft,
+    PageGroupingStateSnapshot,
+    initialize_grouping_acceptance_schema,
+)
+from manga_read_flow.persistence.grouping_stale_repository import (
+    GroupingStaleRepository,
+    GroupingSnapshotStaleFact,
+    initialize_grouping_stale_schema,
+)
+from manga_read_flow.quality.grouping_check import GroupingCheckResult
 from manga_read_flow.persistence.visual_contract_repository import (
     CleaningResultDraft,
     VisualContractRepository,
@@ -94,6 +133,25 @@ class ProjectUnitOfWork:
             project_db_path=project_db_path,
             project_id=project_id,
         )
+        self._detection_evidence = DetectionEvidenceRepository(
+            project_db_path=project_db_path,
+            project_id=project_id,
+        )
+        self._grouping_snapshots = GroupingSnapshotRepository(
+            project_db_path=project_db_path,
+            project_id=project_id,
+        )
+        self._grouping_checks = GroupingCheckRepository(
+            project_db_path=project_db_path,
+            project_id=project_id,
+        )
+        self._grouping_acceptance = GroupingAcceptanceRepository(
+            project_db_path=project_db_path,
+            project_id=project_id,
+        )
+        self._grouping_stale = GroupingStaleRepository(
+            project_db_path=project_db_path, project_id=project_id
+        )
         self._full_page_cleaning_ledger = FullPageCleaningLedgerRepository(
             project_db_path=project_db_path,
             project_id=project_id,
@@ -114,6 +172,61 @@ class ProjectUnitOfWork:
 
     def accept_stage(self, command: AcceptanceCommand) -> AcceptanceOutcome:
         return self._acceptance.accept_stage(command)
+
+    def get_accepted_detection_evidence_set(
+        self,
+        detection_dependency_id: str,
+    ) -> AcceptedDetectionEvidenceSetSnapshot:
+        return self._detection_evidence.get(detection_dependency_id)
+
+    def materialize_grouping_candidate(
+        self,
+        *,
+        snapshot: FrozenGroupingEvidenceSnapshotDraft,
+        ocr_dependencies: tuple[GroupingSnapshotOcrDependencyDraft, ...],
+        generation_run: GroupingGenerationRunDraft,
+    ) -> GroupingCandidateMaterializationOutcome:
+        return self._grouping_snapshots.materialize_candidate(
+            snapshot=snapshot,
+            ocr_dependencies=ocr_dependencies,
+            generation_run=generation_run,
+        )
+
+    def get_frozen_grouping_evidence_snapshot(
+        self,
+        snapshot_id: str,
+    ) -> FrozenGroupingEvidenceSnapshot:
+        return self._grouping_snapshots.get(snapshot_id)
+
+    def record_grouping_generation_outcome(
+        self,
+        run: GroupingGenerationRunDraft,
+    ) -> None:
+        self._grouping_snapshots.record_generation_outcome(run)
+
+    def commit_grouping_check_evaluation(
+        self,
+        *,
+        check_result: GroupingCheckResult,
+        issue_changes: tuple[IssueLifecycleChange, ...],
+        execution: GroupingCheckExecutionDraft,
+    ) -> GroupingCheckCommitOutcome:
+        return self._grouping_checks.commit_evaluation(
+            check_result=check_result,
+            issue_changes=issue_changes,
+            execution=execution,
+        )
+
+    def get_grouping_check_result(self, check_result_id: str) -> GroupingCheckResult:
+        return self._grouping_checks.get(check_result_id)
+
+    def get_current_grouping_snapshot(self, page_id: str) -> CurrentGroupingSnapshot:
+        return self._grouping_acceptance.get_current(page_id)
+
+    def list_grouping_stale_facts(
+        self, snapshot_id: str
+    ) -> tuple[GroupingSnapshotStaleFact, ...]:
+        return self._grouping_stale.list_for_snapshot(snapshot_id)
 
     # Slice 1 ledger facade deliberately excludes acceptance and active-pointer writes.
     def create_or_replay_page_cleaning_run(
@@ -283,6 +396,11 @@ def initialize_repository_core_schema(connection: sqlite3.Connection) -> None:
     initialize_content_state_schema(connection)
     initialize_workflow_execution_schema(connection)
     initialize_artifact_metadata_schema(connection)
+    initialize_detection_evidence_schema(connection)
+    initialize_grouping_snapshot_schema(connection)
+    initialize_grouping_check_schema(connection)
+    initialize_grouping_acceptance_schema(connection)
+    initialize_grouping_stale_schema(connection)
     initialize_visual_contract_schema(connection)
     initialize_full_page_cleaning_ledger_schema(connection)
 
@@ -291,6 +409,7 @@ __all__ = [
     "AcceptanceCommand",
     "AcceptanceOutcome",
     "AcceptedResult",
+    "AcceptedDetectionEvidenceSetSnapshot",
     "AcceptedTextBlock",
     "ActiveOcrInput",
     "ActivePointerUpdate",
@@ -301,6 +420,25 @@ __all__ = [
     "AttemptSnapshot",
     "BatchSnapshot",
     "ContentStateRepository",
+    "ExactActiveOcrDependency",
+    "ExactOcrDependenciesNotReadyError",
+    "DetectionEvidenceRepository",
+    "FrozenGroupingEvidenceSnapshot",
+    "FrozenGroupingEvidenceSnapshotDraft",
+    "GroupingCandidateMaterializationOutcome",
+    "GroupingGenerationRunDraft",
+    "GroupingSnapshotOcrDependencyDraft",
+    "GroupingSnapshotRepository",
+    "GroupingCheckCommitOutcome",
+    "GroupingCheckExecutionDraft",
+    "GroupingCheckRepository",
+    "GroupingCheckResult",
+    "CurrentGroupingSnapshot",
+    "ExpectedGroupingIssue",
+    "GroupingAcceptanceRepository",
+    "GroupingAcceptanceSnapshot",
+    "GroupingDecisionContextDraft",
+    "PageGroupingStateSnapshot",
     "ExpectedState",
     "ExpectedStageStatus",
     "GlossaryRepository",
@@ -313,6 +451,7 @@ __all__ = [
     "ProcessingProfileSnapshot",
     "ProjectUnitOfWork",
     "QualityIssueRepository",
+    "QualityIssueSnapshot",
     "ReadinessQueryRepository",
     "ReadinessSnapshot",
     "ResultVersionRepository",
@@ -325,6 +464,7 @@ __all__ = [
     "ToolRunStart",
     "UnitOfWorkOutcome",
     "WorkflowDecisionDraft",
+    "WorkflowDecisionSnapshot",
     "WorkflowExecutionRepository",
     "CleaningResultDraft",
     "VisualContractRepository",

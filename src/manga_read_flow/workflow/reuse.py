@@ -52,31 +52,6 @@ class WorkflowReuseService:
         stage = task.current_stage
         blocks = self._repositories.content_state.list_text_blocks_for_page(page.page_id)
 
-        if stage == "detection":
-            if blocks and all(block.detection_status == "done" for block in blocks):
-                return ReusePlan(
-                    next_stage="ocr",
-                    reason_code="detected_text_blocks_already_committed",
-                    stage_statuses=tuple(
-                        StageStatusUpdate(
-                            target_type="text_block",
-                            target_id=block.text_block_id,
-                            stage="detection",
-                            status="done",
-                        )
-                        for block in blocks
-                    ),
-                    expected_stage_statuses=tuple(
-                        ExpectedStageStatus(
-                            target_type="text_block",
-                            target_id=block.text_block_id,
-                            stage="detection",
-                            status=block.detection_status,
-                        )
-                        for block in blocks
-                    ),
-                )
-
         if stage == "ocr":
             reusable = self._repositories.result_versions.reusable_active_ocr_for_page(
                 page.page_id,

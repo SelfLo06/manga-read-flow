@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from hashlib import sha256
 import json
 from uuid import uuid4
 
@@ -9,12 +10,18 @@ from manga_read_flow.quality import IssueDraft
 
 def issue_changes_from_drafts(
     issue_drafts: tuple[IssueDraft, ...],
+    *,
+    deterministic_issue_ids: bool = False,
 ) -> tuple[IssueLifecycleChange, ...]:
     changes: list[IssueLifecycleChange] = []
     for draft in issue_drafts:
         changes.append(
             IssueLifecycleChange(
-                issue_id=f"issue-{draft.issue_type}-{uuid4()}",
+                issue_id=(
+                    f"issue-grouping-{sha256(draft.dedupe_key.encode('utf-8')).hexdigest()}"
+                    if deterministic_issue_ids
+                    else f"issue-{draft.issue_type}-{uuid4()}"
+                ),
                 action="create",
                 status=draft.status,
                 issue_type=draft.issue_type,

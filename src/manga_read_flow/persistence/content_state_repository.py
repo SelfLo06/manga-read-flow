@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from hashlib import sha256
 from pathlib import Path
 import sqlite3
 
@@ -53,6 +54,22 @@ class ActiveOcrInput:
     active_ocr_result_id: str | None
     source_text: str | None
     source_text_hash: str | None
+
+
+@dataclass(frozen=True)
+class ExactActiveOcrDependency:
+    text_block_id: str
+    page_id: str
+    ocr_result_id: str
+    version_number: int
+    source_text: str
+    source_text_hash: str
+    geometry_hash: str
+    input_hash: str
+
+
+class ExactOcrDependenciesNotReadyError(ValueError):
+    """Raised when exact Detection members lack complete accepted/current OCR."""
 
 
 @dataclass(frozen=True)
@@ -392,6 +409,90 @@ class ResultVersionRepository:
             )
             for row in rows
         )
+
+    def exact_active_ocr_dependencies(
+        self,
+        *,
+        page_id: str,
+        text_block_ids: tuple[str, ...],
+    ) -> tuple[ExactActiveOcrDependency, ...]:
+        if len(set(text_block_ids)) != len(text_block_ids):
+            raise ValueError("Exact OCR dependency identities must be unique.")
+        ordered_ids = tuple(sorted(text_block_ids, key=lambda value: value.encode("utf-8")))
+        if not ordered_ids:
+            return ()
+        placeholders = ",".join("?" for _ in ordered_ids)
+        with connect_existing(self._project_db_path) as connection:
+            rows = connection.execute(
+                f"""
+                SELECT
+                    tb.text_block_id,
+                    tb.page_id,
+                    tb.ocr_status,
+                    tb.geometry_hash AS text_block_geometry_hash,
+                    tb.active_ocr_result_id,
+                    ocr.ocr_result_id,
+                    ocr.version_number,
+                    ocr.source_text,
+                    ocr.source_text_hash,
+                    ocr.geometry_hash,
+                    ocr.input_hash
+                FROM text_blocks tb
+                LEFT JOIN ocr_results ocr
+                    ON ocr.project_id = tb.project_id
+                    AND ocr.text_block_id = tb.text_block_id
+                    AND ocr.ocr_result_id = tb.active_ocr_result_id
+                WHERE tb.project_id = ?
+                  AND tb.text_block_id IN ({placeholders})
+                ORDER BY tb.text_block_id
+                """,
+                (self._project_id, *ordered_ids),
+            ).fetchall()
+        by_id = {row["text_block_id"]: row for row in rows}
+        if set(by_id) != set(ordered_ids):
+            raise ExactOcrDependenciesNotReadyError(
+                "One or more exact Detection members do not exist."
+            )
+        dependencies = []
+        for text_block_id in ordered_ids:
+            row = by_id[text_block_id]
+            if row["page_id"] != page_id:
+                raise ExactOcrDependenciesNotReadyError(
+                    "Exact OCR dependency is bound to another Page."
+                )
+            if (
+                row["ocr_status"] != "done"
+                or row["active_ocr_result_id"] is None
+                or row["ocr_result_id"] != row["active_ocr_result_id"]
+                or row["version_number"] is None
+                or row["version_number"] < 1
+                or row["source_text"] is None
+                or row["source_text_hash"] is None
+                or row["geometry_hash"] is None
+                or row["input_hash"] is None
+                or not _is_sha256(row["source_text_hash"])
+                or not _is_sha256(row["geometry_hash"])
+                or not _is_sha256(row["input_hash"])
+                or row["geometry_hash"] != row["text_block_geometry_hash"]
+                or sha256(row["source_text"].encode("utf-8")).hexdigest()
+                != row["source_text_hash"]
+            ):
+                raise ExactOcrDependenciesNotReadyError(
+                    f"Exact OCR dependency is not ready: {text_block_id}"
+                )
+            dependencies.append(
+                ExactActiveOcrDependency(
+                    text_block_id=text_block_id,
+                    page_id=row["page_id"],
+                    ocr_result_id=row["ocr_result_id"],
+                    version_number=row["version_number"],
+                    source_text=row["source_text"],
+                    source_text_hash=row["source_text_hash"],
+                    geometry_hash=row["geometry_hash"],
+                    input_hash=row["input_hash"],
+                )
+            )
+        return tuple(dependencies)
 
     def reusable_active_translations_for_page(
         self,
@@ -827,4 +928,12 @@ def _load_text_block(
         translation_check_status=row["translation_check_status"],
         cleaning_status=row["cleaning_status"],
         typesetting_status=row["typesetting_status"],
+    )
+
+
+def _is_sha256(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
     )

@@ -232,6 +232,53 @@ class ArtifactService:
             )
         )
 
+    def read_json_artifact(
+        self,
+        artifact_id: str,
+        *,
+        expected_use: str,
+    ) -> object:
+        """Validate and read an officially registered JSON artifact."""
+        artifact = self._artifact_repository.get_artifact(artifact_id)
+        if artifact.mime_type != self._JSON_MEDIA_TYPE:
+            raise ArtifactValidationError("Artifact is not registered JSON evidence.")
+        payload = self.read_artifact_bytes(
+            artifact_id,
+            expected_use=expected_use,
+        )
+        if len(payload) > self._MAX_JSON_EVIDENCE_BYTES:
+            raise ArtifactValidationError("JSON artifact exceeds the size limit.")
+        try:
+            return json.loads(payload.decode("utf-8"))
+        except UnicodeDecodeError as exc:
+            raise ArtifactValidationError("JSON artifact is not UTF-8.") from exc
+        except json.JSONDecodeError as exc:
+            raise ArtifactValidationError("JSON artifact is malformed.") from exc
+
+    def read_artifact_bytes(
+        self,
+        artifact_id: str,
+        *,
+        expected_use: str,
+    ) -> bytes:
+        """Validate and read bytes through the official safe-path boundary."""
+        integrity = self.validate_artifact(
+            artifact_id,
+            expected_use=expected_use,
+        )
+        if integrity.integrity_status != "valid":
+            raise ArtifactValidationError(
+                f"Artifact is not valid for {expected_use}: {integrity.integrity_status}"
+            )
+        artifact = self._artifact_repository.get_artifact(artifact_id)
+        artifact_path = self._resolve_project_relative_path(artifact.relative_path)
+        payload = artifact_path.read_bytes()
+        if len(payload) != artifact.byte_size:
+            raise ArtifactValidationError("Artifact size changed while reading.")
+        if sha256(payload).hexdigest() != artifact.file_hash:
+            raise ArtifactValidationError("Artifact hash changed while reading.")
+        return payload
+
     def register_stage_image(
         self,
         *,

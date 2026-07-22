@@ -6,6 +6,22 @@ from pathlib import Path
 import sqlite3
 from typing import Mapping
 
+from manga_read_flow.domain.detection_evidence import (
+    AcceptedDetectionEvidenceSetDraft,
+)
+from manga_read_flow.persistence.detection_evidence_repository import (
+    persist_detection_evidence_provenance,
+    persist_detection_evidence_set,
+)
+from manga_read_flow.persistence.grouping_acceptance_repository import (
+    GroupingCommitResult,
+    GroupingDecisionContextDraft,
+    persist_grouping_commit,
+    persist_stale_plans_and_clear_pointer,
+    plan_upstream_grouping_stale,
+    validate_grouping_commit,
+    _ocr_dependency_hash,
+)
 from manga_read_flow.persistence.content_state_repository import (
     _load_page,
     _load_text_block,
@@ -158,9 +174,11 @@ class AcceptanceCommand:
     task_progress: TaskProgressUpdate
     stage_statuses: tuple[StageStatusUpdate, ...]
     accepted_text_blocks: tuple[AcceptedTextBlock, ...] = ()
+    accepted_detection_evidence: AcceptedDetectionEvidenceSetDraft | None = None
     page_statuses: tuple[PageStatusUpdate, ...] = ()
     attempt_terminal_status: str | None = None
     cleaning_result: CleaningResultDraft | None = None
+    grouping_context: GroupingDecisionContextDraft | None = None
 
 
 @dataclass(frozen=True)
@@ -176,6 +194,13 @@ class AcceptanceOutcome:
     task_status: str | None = None
     current_stage: str | None = None
     stage_status_updates: tuple[str, ...] = ()
+    accepted_detection_evidence_set_id: str | None = None
+    grouping_acceptance_id: str | None = None
+    active_grouping_snapshot_id: str | None = None
+    page_grouping_state_version: int | None = None
+    grouping_acceptance_replayed: bool = False
+    grouping_stale_fact_ids: tuple[str, ...] = ()
+    grouping_pointer_cleared: bool = False
 
 
 class AcceptanceRepository:
@@ -185,6 +210,7 @@ class AcceptanceRepository:
 
     def accept_stage(self, command: AcceptanceCommand) -> AcceptanceOutcome:
         with connect_existing(self._project_db_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
             task = _load_task(connection, self._project_id, command.task_id)
             conflicts = list(
                 _task_conflicts(
@@ -205,6 +231,16 @@ class AcceptanceRepository:
             conflicts.extend(
                 _attempt_conflicts(connection, self._project_id, command.expected)
             )
+            grouping_plan = None
+            if command.grouping_context is not None:
+                grouping_plan, grouping_conflicts = validate_grouping_commit(
+                    connection,
+                    project_id=self._project_id,
+                    task_id=command.task_id,
+                    decision=command.workflow_decision,
+                    context=command.grouping_context,
+                )
+                conflicts.extend(grouping_conflicts)
             if conflicts:
                 return AcceptanceOutcome(
                     committed=False,
@@ -212,12 +248,99 @@ class AcceptanceRepository:
                     conflict_fields=tuple(dict.fromkeys(conflicts)),
                 )
 
+            if command.grouping_context is not None and (
+                command.accepted_detection_evidence is not None
+                or any(result.result_type == "ocr" for result in command.accepted_results)
+            ):
+                raise ValueError("Grouping acceptance cannot also mutate its dependencies.")
+
+            stale_plans = []
+            detection = command.accepted_detection_evidence
+            if detection is not None:
+                plan = plan_upstream_grouping_stale(
+                    connection, project_id=self._project_id, page_id=detection.page_id,
+                    reason_type="DETECTION_DEPENDENCY_CHANGED",
+                    previous_dependency_type="ACCEPTED_DETECTION_EVIDENCE_SET",
+                    replacement_dependency_id=detection.detection_dependency_id,
+                    replacement_dependency_hash=detection.canonical_manifest_sha256,
+                    triggering_operation_type="DETECTION_ACCEPTANCE",
+                    triggering_operation_id=detection.provenance.acceptance_id,
+                )
+                if plan is not None:
+                    stale_plans.append(plan)
+            result_by_id = {result.result_id: result for result in command.accepted_results}
+            for pointer in command.active_pointers:
+                if pointer.pointer_name != "active_ocr_result_id" or pointer.value_id is None:
+                    continue
+                result = result_by_id.get(pointer.value_id)
+                if result is None or result.result_type != "ocr":
+                    continue
+                row = connection.execute(
+                    "SELECT page_id FROM text_blocks WHERE project_id = ? AND text_block_id = ?",
+                    (self._project_id, pointer.owner_id),
+                ).fetchone()
+                if row is None:
+                    continue
+                existing_result = connection.execute(
+                    "SELECT version_number FROM ocr_results WHERE project_id = ? AND ocr_result_id = ?",
+                    (self._project_id, result.result_id),
+                ).fetchone()
+                if existing_result is None:
+                    version = connection.execute(
+                        "SELECT COALESCE(MAX(version_number), 0) + 1 AS version FROM ocr_results WHERE project_id = ? AND text_block_id = ?",
+                        (self._project_id, pointer.owner_id),
+                    ).fetchone()["version"]
+                else:
+                    version = existing_result["version_number"]
+                replacement_hash = _ocr_dependency_hash(
+                    result.result_id, version, result.source_text_hash or "",
+                    result.geometry_hash or "", result.input_hash or "",
+                )
+                plan = plan_upstream_grouping_stale(
+                    connection, project_id=self._project_id, page_id=row["page_id"],
+                    reason_type="OCR_DEPENDENCY_CHANGED",
+                    previous_dependency_type="OCR_RESULT",
+                    replacement_dependency_id=result.result_id,
+                    replacement_dependency_hash=replacement_hash,
+                    triggering_operation_type="OCR_ACCEPTANCE",
+                    triggering_operation_id=command.workflow_decision.decision_id,
+                    text_block_id=pointer.owner_id,
+                )
+                if plan is not None:
+                    stale_plans.append(plan)
+
+            if (
+                command.accepted_text_blocks
+                and command.accepted_detection_evidence is None
+            ):
+                raise ValueError(
+                    "Accepted Detection blocks and evidence set must be persisted together."
+                )
+            if command.accepted_detection_evidence is not None and (
+                command.workflow_decision.stage != "detection"
+                or command.workflow_decision.attempt_id
+                != command.accepted_detection_evidence.provenance.workflow_attempt_id
+                or command.workflow_decision.decision_id
+                != command.accepted_detection_evidence.provenance.workflow_decision_id
+            ):
+                raise ValueError("Detection evidence must bind the acceptance decision.")
+
             for text_block in command.accepted_text_blocks:
                 _insert_accepted_text_block(connection, self._project_id, text_block)
+            if command.accepted_detection_evidence is not None:
+                persist_detection_evidence_set(
+                    connection,
+                    self._project_id,
+                    command.accepted_detection_evidence,
+                    command.accepted_text_blocks,
+                )
             for result in command.accepted_results:
                 _insert_accepted_result(connection, self._project_id, result)
             for pointer in command.active_pointers:
                 _apply_active_pointer(connection, self._project_id, pointer)
+            grouping_stale_ids, grouping_stale_version = persist_stale_plans_and_clear_pointer(
+                connection, plans=tuple(stale_plans)
+            )
             for issue_change in command.issue_lifecycle:
                 _apply_issue_change(connection, self._project_id, issue_change)
             if command.cleaning_result is not None:
@@ -232,6 +355,20 @@ class AcceptanceRepository:
                 command.task_id,
                 command.workflow_decision,
             )
+            grouping_commit = GroupingCommitResult(None, None, None, False)
+            if grouping_plan is not None:
+                grouping_commit = persist_grouping_commit(
+                    connection,
+                    project_id=self._project_id,
+                    decision=command.workflow_decision,
+                    plan=grouping_plan,
+                )
+            if command.accepted_detection_evidence is not None:
+                persist_detection_evidence_provenance(
+                    connection,
+                    self._project_id,
+                    command.accepted_detection_evidence,
+                )
             for status_update in command.stage_statuses:
                 _apply_stage_status(connection, self._project_id, status_update)
             for page_status in command.page_statuses:
@@ -285,6 +422,19 @@ class AcceptanceRepository:
                 f"{status.target_type}:{status.target_id}:{status.stage}"
                 for status in command.stage_statuses
             ),
+            accepted_detection_evidence_set_id=(
+                command.accepted_detection_evidence.detection_dependency_id
+                if command.accepted_detection_evidence is not None
+                else None
+            ),
+            grouping_acceptance_id=grouping_commit.acceptance_id,
+            active_grouping_snapshot_id=grouping_commit.active_grouping_snapshot_id,
+            page_grouping_state_version=grouping_commit.page_grouping_state_version,
+            grouping_acceptance_replayed=grouping_commit.replayed,
+            grouping_stale_fact_ids=(
+                tuple(grouping_stale_ids) + grouping_commit.stale_fact_ids
+            ),
+            grouping_pointer_cleared=bool(grouping_stale_ids),
         )
 
 
@@ -397,6 +547,94 @@ def _insert_accepted_text_block(
     project_id: str,
     text_block: AcceptedTextBlock,
 ) -> None:
+    existing = connection.execute(
+        """
+        SELECT
+            project_id,
+            page_id,
+            reading_order,
+            detection_status,
+            bbox_json,
+            polygon_json,
+            geometry_hash,
+            detection_provider,
+            detection_confidence
+        FROM text_blocks
+        WHERE text_block_id = ?
+        """,
+        (text_block.text_block_id,),
+    ).fetchone()
+    if existing is not None:
+        if (
+            existing["project_id"] != project_id
+            or existing["page_id"] != text_block.page_id
+        ):
+            raise ValueError(
+                "Accepted Detection member conflicts with another Project or Page."
+            )
+        expected = (
+            project_id,
+            text_block.page_id,
+            text_block.reading_order,
+            "done",
+            text_block.bbox_json,
+            text_block.polygon_json,
+            text_block.geometry_hash,
+            text_block.detection_provider,
+            text_block.detection_confidence,
+        )
+        actual = tuple(existing)
+        if actual == expected:
+            return
+        now = utc_now()
+        block_update = connection.execute(
+            """
+            UPDATE text_blocks
+            SET reading_order = ?,
+                detection_status = 'done',
+                bbox_json = ?,
+                polygon_json = ?,
+                geometry_hash = ?,
+                detection_provider = ?,
+                detection_confidence = ?,
+                active_ocr_result_id = NULL,
+                active_translation_result_id = NULL,
+                ocr_status = 'pending',
+                translation_status = 'pending',
+                translation_check_status = 'pending',
+                cleaning_status = 'pending',
+                typesetting_status = 'pending',
+                review_status = 'pending',
+                updated_at = ?
+            WHERE project_id = ? AND text_block_id = ?
+            """,
+            (
+                text_block.reading_order,
+                text_block.bbox_json,
+                text_block.polygon_json,
+                text_block.geometry_hash,
+                text_block.detection_provider,
+                text_block.detection_confidence,
+                now,
+                project_id,
+                text_block.text_block_id,
+            ),
+        )
+        page_update = connection.execute(
+            """
+            UPDATE pages
+            SET active_cleaned_artifact_id = NULL,
+                active_typeset_artifact_id = NULL,
+                updated_at = ?
+            WHERE project_id = ? AND page_id = ?
+            """,
+            (now, project_id, text_block.page_id),
+        )
+        if block_update.rowcount != 1 or page_update.rowcount != 1:
+            raise ValueError(
+                "Accepted Detection member stale propagation was not applied."
+            )
+        return
     connection.execute(
         """
         INSERT INTO text_blocks (
@@ -713,6 +951,15 @@ def _apply_issue_change(
             issue_change.issue_id,
         ),
     )
+
+
+def apply_issue_lifecycle_change(
+    connection: sqlite3.Connection,
+    project_id: str,
+    issue_change: IssueLifecycleChange,
+) -> None:
+    """Apply the shared QualityIssue lifecycle inside an owning UoW transaction."""
+    _apply_issue_change(connection, project_id, issue_change)
 
 
 def _insert_workflow_decision(

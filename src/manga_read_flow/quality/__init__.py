@@ -86,6 +86,11 @@ class QualityCheckService:
             summary=_summary(drafts),
         )
 
+    def check_grouping(self, check_input):
+        from manga_read_flow.quality.grouping_check import GroupingCheck
+
+        return GroupingCheck().evaluate(check_input)
+
 
 def _issue_drafts(check_input: QualityCheckInput) -> tuple[IssueDraft, ...]:
     if check_input.is_provider_refusal or check_input.error_kind == "provider_refusal":

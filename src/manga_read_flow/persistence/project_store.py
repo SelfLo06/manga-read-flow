@@ -13,6 +13,26 @@ from uuid import uuid4
 from manga_read_flow.persistence.artifact_metadata_repository import (
     ArtifactMetadataRepository,
 )
+from manga_read_flow.persistence.detection_evidence_repository import (
+    DetectionEvidenceRepository,
+    initialize_detection_evidence_schema,
+)
+from manga_read_flow.persistence.grouping_snapshot_repository import (
+    GroupingSnapshotRepository,
+    initialize_grouping_snapshot_schema,
+)
+from manga_read_flow.persistence.grouping_check_repository import (
+    GroupingCheckRepository,
+    initialize_grouping_check_schema,
+)
+from manga_read_flow.persistence.grouping_acceptance_repository import (
+    GroupingAcceptanceRepository,
+    initialize_grouping_acceptance_schema,
+)
+from manga_read_flow.persistence.grouping_stale_repository import (
+    GroupingStaleRepository,
+    initialize_grouping_stale_schema,
+)
 from manga_read_flow.persistence.repository_uow_core import (
     ContentStateRepository,
     GlossaryRepository,
@@ -41,6 +61,11 @@ PROJECT_BASELINE_VERSION = "project_baseline_v1"
 PROJECT_VISUAL_CONTRACT_VERSION = "project_visual_contract_v2"
 PROJECT_FULL_PAGE_CLEANING_LEDGER_VERSION = "project_full_page_cleaning_ledger_v3"
 PROJECT_FULL_PAGE_CLEANING_ACCEPTANCE_VERSION = "project_full_page_cleaning_acceptance_v3"
+PROJECT_DETECTION_EVIDENCE_VERSION = "project_detection_evidence_v4"
+PROJECT_GROUPING_CANDIDATE_VERSION = "project_grouping_candidate_v5"
+PROJECT_GROUPING_CHECK_VERSION = "project_grouping_check_v6"
+PROJECT_GROUPING_ACCEPTANCE_VERSION = "project_grouping_acceptance_v7"
+PROJECT_GROUPING_STALE_VERSION = "project_grouping_stale_v8"
 APP_BASELINE_CHECKSUM = sha256(
     b"app_baseline_v1:projects:schema_migrations"
 ).hexdigest()
@@ -56,6 +81,178 @@ PROJECT_FULL_PAGE_CLEANING_LEDGER_CHECKSUM = sha256(
 PROJECT_FULL_PAGE_CLEANING_ACCEPTANCE_CHECKSUM = sha256(
     b"project_full_page_cleaning_acceptance_v3:combined_candidate:normalized_membership:page_validation:quality_issue_relations:atomic_acceptance"
 ).hexdigest()
+PROJECT_DETECTION_EVIDENCE_CHECKSUM = sha256(
+    b"project_detection_evidence_v4:immutable_set:exact_members:acceptance_provenance"
+).hexdigest()
+PROJECT_GROUPING_CANDIDATE_CHECKSUM = sha256(
+    b"project_grouping_candidate_v5:immutable_snapshot:exact_ocr_dependencies:generation_runs:paired_outcomes"
+).hexdigest()
+PROJECT_GROUPING_CHECK_CHECKSUM = sha256(
+    b"project_grouping_check_v6:immutable_result:formal_quality_issue_relation:execution_provenance"
+).hexdigest()
+PROJECT_GROUPING_ACCEPTANCE_CHECKSUM = sha256(
+    b"project_grouping_acceptance_v7:workflow_decision:immutable_acceptance:execution_provenance:page_state_cas"
+).hexdigest()
+PROJECT_GROUPING_STALE_CHECKSUM = sha256(
+    b"project_grouping_stale_v8:immutable_stale_facts:clear_on_stale:exact_binding"
+).hexdigest()
+
+PROJECT_GROUPING_STALE_REQUIRED_SCHEMA_OBJECTS = (
+    ("table", "grouping_snapshot_stale_facts"),
+    ("trigger", "trg_grouping_snapshot_stale_facts_immutable_update"),
+    ("trigger", "trg_grouping_snapshot_stale_facts_immutable_delete"),
+)
+PROJECT_GROUPING_STALE_REQUIRED_TABLE_COLUMNS = {
+    "grouping_snapshot_stale_facts": {
+        "stale_fact_id", "project_id", "page_id", "snapshot_id", "acceptance_id",
+        "reason_type", "previous_dependency_type", "previous_dependency_id",
+        "previous_dependency_hash", "replacement_dependency_id",
+        "replacement_dependency_hash", "triggering_operation_type",
+        "triggering_operation_id", "created_at",
+    }
+}
+
+PROJECT_GROUPING_ACCEPTANCE_REQUIRED_SCHEMA_OBJECTS = (
+    ("table", "grouping_snapshot_acceptances"),
+    ("table", "grouping_acceptance_executions"),
+    ("table", "page_grouping_state"),
+    ("trigger", "trg_grouping_snapshot_acceptances_immutable_update"),
+    ("trigger", "trg_grouping_snapshot_acceptances_immutable_delete"),
+    ("trigger", "trg_grouping_acceptance_executions_immutable_update"),
+    ("trigger", "trg_grouping_acceptance_executions_immutable_delete"),
+    ("trigger", "trg_page_grouping_state_acceptance_insert"),
+    ("trigger", "trg_page_grouping_state_acceptance_update"),
+)
+
+PROJECT_GROUPING_ACCEPTANCE_REQUIRED_TABLE_COLUMNS = {
+    "grouping_snapshot_acceptances": {
+        "acceptance_id", "project_id", "page_id", "snapshot_id",
+        "check_result_id", "workflow_decision_id", "workflow_attempt_id",
+        "acceptance_execution_id", "accepted_manifest_sha256",
+        "accepted_dependency_fingerprint", "accepted_at",
+    },
+    "grouping_acceptance_executions": {
+        "execution_id", "project_id", "page_id", "snapshot_id",
+        "check_result_id", "acceptance_id", "workflow_decision_id",
+        "workflow_attempt_id", "outcome", "completed_at",
+    },
+    "page_grouping_state": {
+        "project_id", "page_id", "active_grouping_snapshot_id", "version",
+        "updated_at",
+    },
+}
+
+PROJECT_GROUPING_CHECK_REQUIRED_SCHEMA_OBJECTS = (
+    ("table", "grouping_check_results"),
+    ("table", "grouping_check_result_issues"),
+    ("table", "grouping_check_executions"),
+    ("trigger", "trg_grouping_check_results_immutable_update"),
+    ("trigger", "trg_grouping_check_results_immutable_delete"),
+    ("trigger", "trg_grouping_check_result_issues_immutable_update"),
+    ("trigger", "trg_grouping_check_result_issues_immutable_delete"),
+    ("trigger", "trg_grouping_check_executions_immutable_update"),
+    ("trigger", "trg_grouping_check_executions_immutable_delete"),
+)
+
+PROJECT_GROUPING_CHECK_REQUIRED_TABLE_COLUMNS = {
+    "grouping_check_results": {
+        "check_result_id", "project_id", "page_id", "snapshot_id",
+        "check_name", "check_version", "input_fingerprint",
+        "candidate_manifest_sha256", "candidate_dependency_fingerprint",
+        "metrics_json", "finding_codes_json", "evidence_artifact_id",
+        "evidence_artifact_sha256", "completed_at",
+    },
+    "grouping_check_result_issues": {
+        "relation_id", "project_id", "check_result_id", "snapshot_id",
+        "issue_id", "created_at",
+    },
+    "grouping_check_executions": {
+        "execution_id", "project_id", "page_id", "snapshot_id",
+        "check_result_id", "input_fingerprint", "outcome", "completed_at",
+    },
+}
+
+PROJECT_GROUPING_CANDIDATE_REQUIRED_SCHEMA_OBJECTS = (
+    ("table", "frozen_grouping_evidence_snapshots"),
+    ("table", "grouping_snapshot_ocr_dependencies"),
+    ("table", "grouping_generation_runs"),
+    ("trigger", "trg_frozen_grouping_evidence_snapshots_immutable_update"),
+    ("trigger", "trg_frozen_grouping_evidence_snapshots_immutable_delete"),
+    ("trigger", "trg_grouping_snapshot_ocr_dependencies_immutable_update"),
+    ("trigger", "trg_grouping_snapshot_ocr_dependencies_immutable_delete"),
+    ("trigger", "trg_grouping_generation_runs_immutable_update"),
+    ("trigger", "trg_grouping_generation_runs_immutable_delete"),
+)
+
+PROJECT_GROUPING_CANDIDATE_REQUIRED_TABLE_COLUMNS = {
+    "frozen_grouping_evidence_snapshots": {
+        "snapshot_id", "project_id", "page_id", "source_artifact_id",
+        "source_sha256", "coordinate_space_json", "detection_dependency_id",
+        "detection_dependency_hash", "manifest_artifact_id",
+        "manifest_artifact_sha256", "manifest_schema_version",
+        "profile_snapshot_id", "profile_settings_hash", "producer_name",
+        "producer_version", "producer_implementation_hash",
+        "operation_semantics_version", "dependency_fingerprint",
+        "candidate_disposition", "ocr_dependency_count", "created_at",
+    },
+    "grouping_snapshot_ocr_dependencies": {
+        "snapshot_id", "project_id", "page_id", "text_block_id",
+        "ocr_result_id", "ocr_version_number", "ocr_text_hash",
+        "ocr_geometry_hash", "ocr_input_hash", "canonical_ordinal",
+    },
+    "grouping_generation_runs": {
+        "generation_run_id", "project_id", "page_id",
+        "detection_dependency_id", "profile_snapshot_id", "producer_name",
+        "producer_version", "producer_implementation_hash",
+        "operation_semantics_version", "outcome", "materialization_status",
+        "reason_codes_json", "error_code", "snapshot_id", "created_at",
+    },
+}
+
+PROJECT_DETECTION_EVIDENCE_REQUIRED_SCHEMA_OBJECTS = (
+    ("table", "accepted_detection_evidence_sets"),
+    ("table", "accepted_detection_evidence_members"),
+    ("table", "detection_evidence_acceptance_provenance"),
+    ("trigger", "trg_accepted_detection_evidence_sets_immutable_update"),
+    ("trigger", "trg_accepted_detection_evidence_sets_immutable_delete"),
+    ("trigger", "trg_accepted_detection_evidence_members_immutable_update"),
+    ("trigger", "trg_accepted_detection_evidence_members_immutable_delete"),
+    ("trigger", "trg_detection_evidence_acceptance_provenance_immutable_update"),
+    ("trigger", "trg_detection_evidence_acceptance_provenance_immutable_delete"),
+)
+
+PROJECT_DETECTION_EVIDENCE_REQUIRED_TABLE_COLUMNS = {
+    "accepted_detection_evidence_sets": {
+        "detection_dependency_id",
+        "project_id",
+        "page_id",
+        "source_artifact_id",
+        "source_sha256",
+        "coordinate_space_json",
+        "canonical_member_count",
+        "manifest_artifact_id",
+        "canonical_manifest_sha256",
+        "schema_version",
+        "created_at",
+    },
+    "accepted_detection_evidence_members": {
+        "detection_dependency_id",
+        "project_id",
+        "page_id",
+        "text_block_id",
+        "canonical_ordinal",
+    },
+    "detection_evidence_acceptance_provenance": {
+        "acceptance_id",
+        "detection_dependency_id",
+        "project_id",
+        "page_id",
+        "workflow_attempt_id",
+        "workflow_decision_id",
+        "provider_execution_reference",
+        "accepted_at",
+    },
+}
 
 PROJECT_FULL_PAGE_CLEANING_REQUIRED_MIGRATIONS = (
     (PROJECT_FULL_PAGE_CLEANING_LEDGER_VERSION, PROJECT_FULL_PAGE_CLEANING_LEDGER_CHECKSUM),
@@ -443,7 +640,7 @@ class AppStore:
             )
 
     def migrate_project(self, project_id: str) -> ProjectOpenResult:
-        """Apply explicit additive project migrations through the ledger v3 schema."""
+        """Apply explicit additive project migrations through Grouping Check v6."""
         self._require_ready()
         project_record = self._load_project_record(project_id)
         if project_record is None or not self._project_paths_are_valid(project_record):
@@ -499,6 +696,73 @@ class AppStore:
                     ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED,
                 }:
                     return ProjectOpenResult(status=completion, project_id=project_id, project_record=project_record)
+                detection_evidence = _verify_migration(
+                    connection,
+                    version=PROJECT_DETECTION_EVIDENCE_VERSION,
+                    checksum=PROJECT_DETECTION_EVIDENCE_CHECKSUM,
+                    missing_status=ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED,
+                )
+                if detection_evidence not in {
+                    ProjectOpenStatus.READY,
+                    ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED,
+                }:
+                    return ProjectOpenResult(
+                        status=detection_evidence,
+                        project_id=project_id,
+                        project_record=project_record,
+                    )
+                grouping_candidate = _verify_migration(
+                    connection,
+                    version=PROJECT_GROUPING_CANDIDATE_VERSION,
+                    checksum=PROJECT_GROUPING_CANDIDATE_CHECKSUM,
+                    missing_status=ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED,
+                )
+                if grouping_candidate not in {
+                    ProjectOpenStatus.READY,
+                    ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED,
+                }:
+                    return ProjectOpenResult(
+                        status=grouping_candidate,
+                        project_id=project_id,
+                        project_record=project_record,
+                    )
+                grouping_check = _verify_migration(
+                    connection,
+                    version=PROJECT_GROUPING_CHECK_VERSION,
+                    checksum=PROJECT_GROUPING_CHECK_CHECKSUM,
+                    missing_status=ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED,
+                )
+                if grouping_check not in {
+                    ProjectOpenStatus.READY,
+                    ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED,
+                }:
+                    return ProjectOpenResult(
+                        status=grouping_check,
+                        project_id=project_id,
+                        project_record=project_record,
+                    )
+                grouping_acceptance = _verify_migration(
+                    connection,
+                    version=PROJECT_GROUPING_ACCEPTANCE_VERSION,
+                    checksum=PROJECT_GROUPING_ACCEPTANCE_CHECKSUM,
+                    missing_status=ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED,
+                )
+                if grouping_acceptance not in {
+                    ProjectOpenStatus.READY,
+                    ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED,
+                }:
+                    return ProjectOpenResult(
+                        status=grouping_acceptance,
+                        project_id=project_id,
+                        project_record=project_record,
+                    )
+                grouping_stale = _verify_migration(
+                    connection, version=PROJECT_GROUPING_STALE_VERSION,
+                    checksum=PROJECT_GROUPING_STALE_CHECKSUM,
+                    missing_status=ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED,
+                )
+                if grouping_stale not in {ProjectOpenStatus.READY, ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED}:
+                    return ProjectOpenResult(status=grouping_stale, project_id=project_id, project_record=project_record)
 
                 if visual is ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED or ledger is ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED:
                     connection.execute("BEGIN IMMEDIATE")
@@ -522,11 +786,59 @@ class AppStore:
                 if completion is ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED:
                     connection.execute("BEGIN IMMEDIATE")
                     initialize_full_page_cleaning_acceptance_schema(connection)
-                    _require_project_schema_shape(connection)
+                    _require_full_page_cleaning_schema_shape(connection)
                     _ensure_migration(
                         connection,
                         version=PROJECT_FULL_PAGE_CLEANING_ACCEPTANCE_VERSION,
                         checksum=PROJECT_FULL_PAGE_CLEANING_ACCEPTANCE_CHECKSUM,
+                    )
+                    connection.commit()
+                if detection_evidence is ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED:
+                    connection.execute("BEGIN IMMEDIATE")
+                    initialize_detection_evidence_schema(connection)
+                    _require_detection_evidence_schema_shape(connection)
+                    _ensure_migration(
+                        connection,
+                        version=PROJECT_DETECTION_EVIDENCE_VERSION,
+                        checksum=PROJECT_DETECTION_EVIDENCE_CHECKSUM,
+                    )
+                    connection.commit()
+                if grouping_candidate is ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED:
+                    connection.execute("BEGIN IMMEDIATE")
+                    initialize_grouping_snapshot_schema(connection)
+                    _require_grouping_candidate_schema_shape(connection)
+                    _ensure_migration(
+                        connection,
+                        version=PROJECT_GROUPING_CANDIDATE_VERSION,
+                        checksum=PROJECT_GROUPING_CANDIDATE_CHECKSUM,
+                    )
+                    connection.commit()
+                if grouping_check is ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED:
+                    connection.execute("BEGIN IMMEDIATE")
+                    initialize_grouping_check_schema(connection)
+                    _require_grouping_check_schema_shape(connection)
+                    _ensure_migration(
+                        connection,
+                        version=PROJECT_GROUPING_CHECK_VERSION,
+                        checksum=PROJECT_GROUPING_CHECK_CHECKSUM,
+                    )
+                    connection.commit()
+                if grouping_acceptance is ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED:
+                    connection.execute("BEGIN IMMEDIATE")
+                    initialize_grouping_acceptance_schema(connection)
+                    _require_grouping_acceptance_schema_shape(connection)
+                    _ensure_migration(
+                        connection,
+                        version=PROJECT_GROUPING_ACCEPTANCE_VERSION,
+                        checksum=PROJECT_GROUPING_ACCEPTANCE_CHECKSUM,
+                    )
+                    connection.commit()
+                if grouping_stale is ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED:
+                    connection.execute("BEGIN IMMEDIATE")
+                    initialize_grouping_stale_schema(connection)
+                    _ensure_migration(
+                        connection, version=PROJECT_GROUPING_STALE_VERSION,
+                        checksum=PROJECT_GROUPING_STALE_CHECKSUM,
                     )
                     connection.commit()
         except sqlite3.DatabaseError:
@@ -618,6 +930,25 @@ class ProjectRepositories:
         self.artifact_metadata = ArtifactMetadataRepository(
             project_db_path=project_db_path,
             project_id=project_id,
+        )
+        self.detection_evidence = DetectionEvidenceRepository(
+            project_db_path=project_db_path,
+            project_id=project_id,
+        )
+        self.grouping_snapshots = GroupingSnapshotRepository(
+            project_db_path=project_db_path,
+            project_id=project_id,
+        )
+        self.grouping_checks = GroupingCheckRepository(
+            project_db_path=project_db_path,
+            project_id=project_id,
+        )
+        self.grouping_acceptance = GroupingAcceptanceRepository(
+            project_db_path=project_db_path,
+            project_id=project_id,
+        )
+        self.grouping_stale = GroupingStaleRepository(
+            project_db_path=project_db_path, project_id=project_id
         )
         self.visual_contract = VisualContractRepository(
             project_db_path=project_db_path,
@@ -771,6 +1102,30 @@ def _initialize_project_database(
             version=PROJECT_FULL_PAGE_CLEANING_ACCEPTANCE_VERSION,
             checksum=PROJECT_FULL_PAGE_CLEANING_ACCEPTANCE_CHECKSUM,
         )
+        _ensure_migration(
+            connection,
+            version=PROJECT_DETECTION_EVIDENCE_VERSION,
+            checksum=PROJECT_DETECTION_EVIDENCE_CHECKSUM,
+        )
+        _ensure_migration(
+            connection,
+            version=PROJECT_GROUPING_CANDIDATE_VERSION,
+            checksum=PROJECT_GROUPING_CANDIDATE_CHECKSUM,
+        )
+        _ensure_migration(
+            connection,
+            version=PROJECT_GROUPING_CHECK_VERSION,
+            checksum=PROJECT_GROUPING_CHECK_CHECKSUM,
+        )
+        _ensure_migration(
+            connection,
+            version=PROJECT_GROUPING_ACCEPTANCE_VERSION,
+            checksum=PROJECT_GROUPING_ACCEPTANCE_CHECKSUM,
+        )
+        _ensure_migration(
+            connection, version=PROJECT_GROUPING_STALE_VERSION,
+            checksum=PROJECT_GROUPING_STALE_CHECKSUM,
+        )
 
 
 def _connect(path: Path) -> sqlite3.Connection:
@@ -896,10 +1251,83 @@ def _project_migration_status(connection: sqlite3.Connection) -> ProjectOpenStat
     )
     if completion_status is not ProjectOpenStatus.READY:
         return completion_status
+    detection_evidence_status = _verify_migration(
+        connection,
+        version=PROJECT_DETECTION_EVIDENCE_VERSION,
+        checksum=PROJECT_DETECTION_EVIDENCE_CHECKSUM,
+        missing_status=ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED,
+    )
+    if detection_evidence_status is not ProjectOpenStatus.READY:
+        return detection_evidence_status
+    grouping_candidate_status = _verify_migration(
+        connection,
+        version=PROJECT_GROUPING_CANDIDATE_VERSION,
+        checksum=PROJECT_GROUPING_CANDIDATE_CHECKSUM,
+        missing_status=ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED,
+    )
+    if grouping_candidate_status is not ProjectOpenStatus.READY:
+        return grouping_candidate_status
+    grouping_check_status = _verify_migration(
+        connection,
+        version=PROJECT_GROUPING_CHECK_VERSION,
+        checksum=PROJECT_GROUPING_CHECK_CHECKSUM,
+        missing_status=ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED,
+    )
+    if grouping_check_status is not ProjectOpenStatus.READY:
+        return grouping_check_status
+    grouping_acceptance_status = _verify_migration(
+        connection,
+        version=PROJECT_GROUPING_ACCEPTANCE_VERSION,
+        checksum=PROJECT_GROUPING_ACCEPTANCE_CHECKSUM,
+        missing_status=ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED,
+    )
+    if grouping_acceptance_status is not ProjectOpenStatus.READY:
+        return grouping_acceptance_status
+    grouping_stale_status = _verify_migration(
+        connection, version=PROJECT_GROUPING_STALE_VERSION,
+        checksum=PROJECT_GROUPING_STALE_CHECKSUM,
+        missing_status=ProjectOpenStatus.PROJECT_MIGRATION_REQUIRED,
+    )
+    if grouping_stale_status is not ProjectOpenStatus.READY:
+        return grouping_stale_status
     return _project_schema_shape_status(connection)
 
 
 def _project_schema_shape_status(connection: sqlite3.Connection) -> ProjectOpenStatus:
+    full_page_status = _full_page_cleaning_schema_shape_status(connection)
+    if full_page_status is not ProjectOpenStatus.READY:
+        return full_page_status
+    detection_status = _detection_evidence_schema_shape_status(connection)
+    if detection_status is not ProjectOpenStatus.READY:
+        return detection_status
+    grouping_candidate_status = _grouping_candidate_schema_shape_status(connection)
+    if grouping_candidate_status is not ProjectOpenStatus.READY:
+        return grouping_candidate_status
+    grouping_check_status = _grouping_check_schema_shape_status(connection)
+    if grouping_check_status is not ProjectOpenStatus.READY:
+        return grouping_check_status
+    grouping_acceptance_status = _grouping_acceptance_schema_shape_status(connection)
+    if grouping_acceptance_status is not ProjectOpenStatus.READY:
+        return grouping_acceptance_status
+    return _grouping_stale_schema_shape_status(connection)
+
+
+def _grouping_stale_schema_shape_status(connection: sqlite3.Connection) -> ProjectOpenStatus:
+    for object_type, name in PROJECT_GROUPING_STALE_REQUIRED_SCHEMA_OBJECTS:
+        if connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = ? AND name = ?", (object_type, name)
+        ).fetchone() is None:
+            return ProjectOpenStatus.PROJECT_MIGRATION_FAILED
+    for table, required in PROJECT_GROUPING_STALE_REQUIRED_TABLE_COLUMNS.items():
+        actual = {row["name"] for row in connection.execute(f"PRAGMA table_info({table})")}
+        if not required.issubset(actual):
+            return ProjectOpenStatus.PROJECT_MIGRATION_FAILED
+    return ProjectOpenStatus.READY
+
+
+def _full_page_cleaning_schema_shape_status(
+    connection: sqlite3.Connection,
+) -> ProjectOpenStatus:
     for object_type, name in PROJECT_FULL_PAGE_CLEANING_REQUIRED_SCHEMA_OBJECTS:
         row = connection.execute(
             "SELECT 1 FROM sqlite_master WHERE type = ? AND name = ?",
@@ -924,9 +1352,120 @@ def _project_schema_shape_status(connection: sqlite3.Connection) -> ProjectOpenS
     return ProjectOpenStatus.READY
 
 
+def _detection_evidence_schema_shape_status(
+    connection: sqlite3.Connection,
+) -> ProjectOpenStatus:
+    for object_type, name in PROJECT_DETECTION_EVIDENCE_REQUIRED_SCHEMA_OBJECTS:
+        row = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = ? AND name = ?",
+            (object_type, name),
+        ).fetchone()
+        if row is None:
+            return ProjectOpenStatus.PROJECT_MIGRATION_FAILED
+    for table, required_columns in PROJECT_DETECTION_EVIDENCE_REQUIRED_TABLE_COLUMNS.items():
+        actual_columns = {
+            row["name"] for row in connection.execute(f"PRAGMA table_info({table})").fetchall()
+        }
+        if not required_columns.issubset(actual_columns):
+            return ProjectOpenStatus.PROJECT_MIGRATION_FAILED
+    return ProjectOpenStatus.READY
+
+
+def _grouping_candidate_schema_shape_status(
+    connection: sqlite3.Connection,
+) -> ProjectOpenStatus:
+    for object_type, name in PROJECT_GROUPING_CANDIDATE_REQUIRED_SCHEMA_OBJECTS:
+        row = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = ? AND name = ?",
+            (object_type, name),
+        ).fetchone()
+        if row is None:
+            return ProjectOpenStatus.PROJECT_MIGRATION_FAILED
+    for table, required_columns in PROJECT_GROUPING_CANDIDATE_REQUIRED_TABLE_COLUMNS.items():
+        actual_columns = {
+            row["name"] for row in connection.execute(f"PRAGMA table_info({table})").fetchall()
+        }
+        if not required_columns.issubset(actual_columns):
+            return ProjectOpenStatus.PROJECT_MIGRATION_FAILED
+    return ProjectOpenStatus.READY
+
+
+def _grouping_check_schema_shape_status(
+    connection: sqlite3.Connection,
+) -> ProjectOpenStatus:
+    for object_type, name in PROJECT_GROUPING_CHECK_REQUIRED_SCHEMA_OBJECTS:
+        row = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = ? AND name = ?",
+            (object_type, name),
+        ).fetchone()
+        if row is None:
+            return ProjectOpenStatus.PROJECT_MIGRATION_FAILED
+    for table, required_columns in PROJECT_GROUPING_CHECK_REQUIRED_TABLE_COLUMNS.items():
+        actual_columns = {
+            row["name"] for row in connection.execute(f"PRAGMA table_info({table})").fetchall()
+        }
+        if not required_columns.issubset(actual_columns):
+            return ProjectOpenStatus.PROJECT_MIGRATION_FAILED
+    return ProjectOpenStatus.READY
+
+
+def _grouping_acceptance_schema_shape_status(
+    connection: sqlite3.Connection,
+) -> ProjectOpenStatus:
+    for object_type, name in PROJECT_GROUPING_ACCEPTANCE_REQUIRED_SCHEMA_OBJECTS:
+        row = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = ? AND name = ?",
+            (object_type, name),
+        ).fetchone()
+        if row is None:
+            return ProjectOpenStatus.PROJECT_MIGRATION_FAILED
+    for table, required_columns in PROJECT_GROUPING_ACCEPTANCE_REQUIRED_TABLE_COLUMNS.items():
+        actual_columns = {
+            row["name"]
+            for row in connection.execute(f"PRAGMA table_info({table})").fetchall()
+        }
+        if not required_columns.issubset(actual_columns):
+            return ProjectOpenStatus.PROJECT_MIGRATION_FAILED
+    return ProjectOpenStatus.READY
+
+
+def _require_grouping_candidate_schema_shape(connection: sqlite3.Connection) -> None:
+    if (
+        _grouping_candidate_schema_shape_status(connection)
+        is not ProjectOpenStatus.READY
+    ):
+        raise sqlite3.OperationalError("Grouping candidate schema shape is invalid.")
+
+
+def _require_full_page_cleaning_schema_shape(connection: sqlite3.Connection) -> None:
+    if (
+        _full_page_cleaning_schema_shape_status(connection)
+        is not ProjectOpenStatus.READY
+    ):
+        raise sqlite3.OperationalError("Full-page Cleaning schema shape is invalid.")
+
+
+def _require_detection_evidence_schema_shape(connection: sqlite3.Connection) -> None:
+    if (
+        _detection_evidence_schema_shape_status(connection)
+        is not ProjectOpenStatus.READY
+    ):
+        raise sqlite3.OperationalError("Detection evidence schema shape is invalid.")
+
+
+def _require_grouping_check_schema_shape(connection: sqlite3.Connection) -> None:
+    if _grouping_check_schema_shape_status(connection) is not ProjectOpenStatus.READY:
+        raise sqlite3.OperationalError("Grouping Check schema shape is invalid.")
+
+
+def _require_grouping_acceptance_schema_shape(connection: sqlite3.Connection) -> None:
+    if _grouping_acceptance_schema_shape_status(connection) is not ProjectOpenStatus.READY:
+        raise sqlite3.OperationalError("Grouping acceptance schema shape is invalid.")
+
+
 def _require_project_schema_shape(connection: sqlite3.Connection) -> None:
     if _project_schema_shape_status(connection) is not ProjectOpenStatus.READY:
-        raise sqlite3.OperationalError("Full-page Cleaning v3 schema shape is invalid.")
+        raise sqlite3.OperationalError("Project schema shape is invalid.")
 
 
 def _project_metadata_version_status(version: str) -> ProjectOpenStatus:

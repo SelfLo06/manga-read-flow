@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from hashlib import sha256
 import json
 from pathlib import Path
 import sqlite3
@@ -137,6 +138,43 @@ class UnitOfWorkOutcome:
     attempt_id: str | None = None
 
 
+@dataclass(frozen=True)
+class QualityIssueSnapshot:
+    issue_id: str
+    target_type: str | None
+    target_id: str | None
+    page_id: str | None
+    discovered_stage: str | None
+    root_stage: str | None
+    issue_type: str
+    error_code: str | None
+    severity: str | None
+    status: str
+    is_blocking: bool
+    message_key: str | None
+    message_params: dict[str, object]
+    suggested_action_key: str | None
+    related_artifact_id: str | None
+    applies_to_result_id: str | None
+    input_hash: str | None
+    config_hash: str | None
+    dedupe_key: str | None
+    created_at: str
+    updated_at: str
+
+
+@dataclass(frozen=True)
+class WorkflowDecisionSnapshot:
+    decision_id: str
+    task_id: str
+    attempt_id: str | None
+    stage: str
+    decision_type: str
+    reason_code: str
+    linked_issue_ids: tuple[str, ...]
+    created_at: str
+
+
 class WorkflowExecutionRepository:
     def __init__(self, *, project_db_path: Path, project_id: str) -> None:
         self._project_db_path = project_db_path
@@ -196,6 +234,37 @@ class WorkflowExecutionRepository:
         with connect_existing(self._project_db_path) as connection:
             return _load_task(connection, self._project_id, task_id)
 
+    def get_decision(self, decision_id: str) -> WorkflowDecisionSnapshot:
+        with connect_existing(self._project_db_path) as connection:
+            row = connection.execute(
+                """
+                SELECT decision_id, task_id, attempt_id, stage, decision_type,
+                       reason_code, created_at
+                FROM workflow_decisions
+                WHERE project_id = ? AND decision_id = ?
+                """,
+                (self._project_id, decision_id),
+            ).fetchone()
+            if row is None:
+                raise LookupError(f"WorkflowDecision not found: {decision_id}")
+            issue_rows = connection.execute(
+                """
+                SELECT issue_id FROM workflow_decision_issues
+                WHERE decision_id = ? ORDER BY issue_id
+                """,
+                (decision_id,),
+            ).fetchall()
+        return WorkflowDecisionSnapshot(
+            decision_id=row["decision_id"],
+            task_id=row["task_id"],
+            attempt_id=row["attempt_id"],
+            stage=row["stage"],
+            decision_type=row["decision_type"],
+            reason_code=row["reason_code"],
+            linked_issue_ids=tuple(item["issue_id"] for item in issue_rows),
+            created_at=row["created_at"],
+        )
+
     def ensure_profile_snapshot(
         self,
         *,
@@ -248,6 +317,35 @@ class WorkflowExecutionRepository:
                     (self._project_id, profile_snapshot_id),
                 ).fetchone()
 
+        return ProcessingProfileSnapshot(
+            profile_snapshot_id=row["profile_snapshot_id"],
+            settings_json=row["settings_json"],
+            settings_hash=row["settings_hash"],
+        )
+
+    def get_profile_snapshot(
+        self,
+        profile_snapshot_id: str,
+    ) -> ProcessingProfileSnapshot:
+        with connect_existing(self._project_db_path) as connection:
+            row = connection.execute(
+                """
+                SELECT profile_snapshot_id, settings_json, settings_hash
+                FROM processing_profile_snapshots
+                WHERE project_id = ? AND profile_snapshot_id = ?
+                """,
+                (self._project_id, profile_snapshot_id),
+            ).fetchone()
+        if row is None:
+            raise LookupError(f"ProcessingProfileSnapshot not found: {profile_snapshot_id}")
+        try:
+            json.loads(row["settings_json"])
+        except json.JSONDecodeError as exc:
+            raise ValueError("ProcessingProfileSnapshot settings are malformed.") from exc
+        if sha256(row["settings_json"].encode("utf-8")).hexdigest() != row[
+            "settings_hash"
+        ]:
+            raise ValueError("ProcessingProfileSnapshot settings hash is inconsistent.")
         return ProcessingProfileSnapshot(
             profile_snapshot_id=row["profile_snapshot_id"],
             settings_json=row["settings_json"],
@@ -344,6 +442,50 @@ class QualityIssueRepository:
                 (self._project_id, "open"),
             ).fetchone()
         return int(row["count"])
+
+    def list_for_result(self, result_id: str) -> tuple[QualityIssueSnapshot, ...]:
+        with connect_existing(self._project_db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM quality_issues
+                WHERE project_id = ? AND applies_to_result_id = ?
+                ORDER BY created_at, issue_id
+                """,
+                (self._project_id, result_id),
+            ).fetchall()
+        return tuple(_quality_issue_snapshot(row) for row in rows)
+
+
+def _quality_issue_snapshot(row: sqlite3.Row) -> QualityIssueSnapshot:
+    try:
+        message_params = json.loads(row["message_params_json"] or "{}")
+    except json.JSONDecodeError as exc:
+        raise ValueError("QualityIssue message parameters are malformed.") from exc
+    if not isinstance(message_params, dict):
+        raise ValueError("QualityIssue message parameters must be an object.")
+    return QualityIssueSnapshot(
+        issue_id=row["issue_id"],
+        target_type=row["target_type"],
+        target_id=row["target_id"],
+        page_id=row["page_id"],
+        discovered_stage=row["discovered_stage"],
+        root_stage=row["root_stage"],
+        issue_type=row["issue_type"],
+        error_code=row["error_code"],
+        severity=row["severity"],
+        status=row["status"],
+        is_blocking=bool(row["is_blocking"]),
+        message_key=row["message_key"],
+        message_params=message_params,
+        suggested_action_key=row["suggested_action_key"],
+        related_artifact_id=row["related_artifact_id"],
+        applies_to_result_id=row["applies_to_result_id"],
+        input_hash=row["input_hash"],
+        config_hash=row["config_hash"],
+        dedupe_key=row["dedupe_key"],
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
 
 
 class ReadinessQueryRepository:

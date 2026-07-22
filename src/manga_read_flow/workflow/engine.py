@@ -2,10 +2,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from hashlib import sha256
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from uuid import uuid4
 
+from manga_read_flow.domain.artifacts import ArtifactSafetyMetadata
+from manga_read_flow.domain.detection_evidence import (
+    AcceptedDetectionEvidenceMember,
+    AcceptedDetectionEvidenceSemanticInput,
+    AcceptedDetectionEvidenceSetDraft,
+    DetectionEvidenceAcceptanceProvenanceDraft,
+    StableDetectionProviderIdentity,
+    canonicalize_detection_evidence,
+)
 from manga_read_flow.domain.provider_contracts import StageProvider
 from manga_read_flow.quality import (
     QualityCheckInput,
@@ -62,6 +72,34 @@ class ProcessPageResult:
     final_decision: str
 
 
+@dataclass(frozen=True)
+class GroupingWorkflowIssue:
+    issue_id: str
+    status: str
+    is_blocking: bool
+
+
+@dataclass(frozen=True)
+class GroupingWorkflowDecisionInput:
+    snapshot_id: str
+    check_result_id: str
+    execution_id: str
+    candidate_disposition: str
+    related_issues: tuple[GroupingWorkflowIssue, ...]
+    retry_budget: int
+    dependencies_valid: bool
+    check_applicable: bool
+    expected_active_grouping_snapshot_id: str | None
+    expected_page_grouping_state_version: int | None
+
+
+@dataclass(frozen=True)
+class GroupingWorkflowDecision:
+    decision_type: str
+    reason_code: str
+    linked_issue_ids: tuple[str, ...]
+
+
 class WorkflowLoopEngine:
     def __init__(
         self,
@@ -85,6 +123,56 @@ class WorkflowLoopEngine:
             artifact_service=artifact_service,
             provider_identity=self._provider_identity,
             config_hash=self._config_hash,
+        )
+
+    @staticmethod
+    def decide_grouping(
+        decision_input: GroupingWorkflowDecisionInput,
+    ) -> GroupingWorkflowDecision:
+        """Make the sole Workflow decision over persisted Grouping evidence."""
+        if decision_input.retry_budget < 0:
+            raise ValueError("Grouping retry budget cannot be negative.")
+        if not decision_input.snapshot_id or not decision_input.check_result_id:
+            raise ValueError("Grouping decision requires exact candidate and CheckResult IDs.")
+        linked_issue_ids = tuple(
+            sorted(
+                {issue.issue_id for issue in decision_input.related_issues},
+                key=lambda value: value.encode("utf-8"),
+            )
+        )
+        unresolved_blockers = tuple(
+            issue.issue_id
+            for issue in decision_input.related_issues
+            if issue.is_blocking and issue.status == "open"
+        )
+        if not decision_input.dependencies_valid:
+            return GroupingWorkflowDecision(
+                decision_type="block",
+                reason_code="grouping_dependencies_changed",
+                linked_issue_ids=linked_issue_ids,
+            )
+        if not decision_input.check_applicable:
+            return GroupingWorkflowDecision(
+                decision_type="block",
+                reason_code="grouping_check_not_applicable",
+                linked_issue_ids=linked_issue_ids,
+            )
+        if unresolved_blockers:
+            return GroupingWorkflowDecision(
+                decision_type="block",
+                reason_code="grouping_blocking_quality_issue",
+                linked_issue_ids=linked_issue_ids,
+            )
+        if decision_input.candidate_disposition != "PRODUCED":
+            return GroupingWorkflowDecision(
+                decision_type="block",
+                reason_code="grouping_candidate_not_acceptable",
+                linked_issue_ids=linked_issue_ids,
+            )
+        return GroupingWorkflowDecision(
+            decision_type="accept",
+            reason_code="grouping_candidate_accepted",
+            linked_issue_ids=linked_issue_ids,
         )
 
     def run_task(self, task_id: str) -> ProcessPageResult:
@@ -306,6 +394,29 @@ class WorkflowLoopEngine:
         raise ValueError(f"Unsupported stage: {stage_result.stage}")
 
     def _accept_detection(self, task, page, stage_result: StageResult):
+        accepted_text_blocks = tuple(
+            AcceptedTextBlock(
+                text_block_id=text_block.text_block_id,
+                page_id=page.page_id,
+                reading_order=text_block.reading_order,
+                bbox_json=text_block.bbox_json,
+                polygon_json=text_block.polygon_json,
+                geometry_hash=text_block.geometry_hash,
+                detection_provider=stage_result.provider_result.provider_name,
+                detection_confidence=text_block.confidence,
+            )
+            for text_block in detected_text_blocks(
+                page.page_id,
+                stage_result.candidate_outputs,
+            )
+        )
+        decision_id = f"decision-01-detection-{uuid4()}"
+        evidence_set = self._prepare_detection_evidence_set(
+            page=page,
+            stage_result=stage_result,
+            accepted_text_blocks=accepted_text_blocks,
+            decision_id=decision_id,
+        )
         return self._repositories.uow.accept_stage(
             self._command(
                 task_id=task.task_id,
@@ -316,24 +427,125 @@ class WorkflowLoopEngine:
                 decision_type="continue",
                 reason_code="fake_detection_accepted",
                 next_stage="ocr",
-                accepted_text_blocks=tuple(
-                    AcceptedTextBlock(
-                        text_block_id=text_block.text_block_id,
-                        page_id=page.page_id,
-                        reading_order=text_block.reading_order,
-                        bbox_json=text_block.bbox_json,
-                        polygon_json=text_block.polygon_json,
-                        geometry_hash=text_block.geometry_hash,
-                        detection_provider=stage_result.provider_result.provider_name,
-                        detection_confidence=text_block.confidence,
-                    )
-                    for text_block in detected_text_blocks(
-                        page.page_id,
-                        stage_result.candidate_outputs,
-                    )
-                ),
+                decision_id=decision_id,
+                accepted_text_blocks=accepted_text_blocks,
+                accepted_detection_evidence=evidence_set,
                 page_status="processing",
             )
+        )
+
+    def _prepare_detection_evidence_set(
+        self,
+        *,
+        page,
+        stage_result: StageResult,
+        accepted_text_blocks: tuple[AcceptedTextBlock, ...],
+        decision_id: str,
+    ) -> AcceptedDetectionEvidenceSetDraft:
+        source = self._repositories.artifact_metadata.get_artifact(
+            page.original_artifact_id
+        )
+        coordinate_space = {
+            "kind": "source_image_pixels",
+            "origin": "top_left",
+            "unit": "pixel",
+            "x_axis": "right",
+            "y_axis": "down",
+        }
+        if source.width is not None and source.height is not None:
+            coordinate_space["extent"] = {
+                "height": source.height,
+                "width": source.width,
+            }
+        coordinate_space_json = json.dumps(
+            coordinate_space,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        provider = StableDetectionProviderIdentity(
+            provider_name=self._provider_identity.provider_name,
+            provider_kind=self._provider_identity.provider_kind,
+            model_id=self._provider_identity.model_id,
+            tool_name=self._provider_identity.tool_name,
+            tool_version=self._provider_identity.tool_version,
+        )
+        canonical = canonicalize_detection_evidence(
+            AcceptedDetectionEvidenceSemanticInput(
+                project_id=self._project_id,
+                page_id=page.page_id,
+                source_artifact_id=source.artifact_id,
+                source_sha256=source.file_hash,
+                coordinate_space_json=coordinate_space_json,
+                detection_config_hash=self._config_hash,
+                provider=provider,
+                members=tuple(
+                    AcceptedDetectionEvidenceMember(
+                        text_block_id=block.text_block_id,
+                        project_id=self._project_id,
+                        page_id=block.page_id,
+                        reading_order=block.reading_order,
+                        bbox_json=block.bbox_json,
+                        polygon_json=block.polygon_json,
+                        geometry_hash=block.geometry_hash,
+                        coordinate_space_json=coordinate_space_json,
+                        detection_provider=block.detection_provider,
+                        detection_confidence=block.detection_confidence,
+                    )
+                    for block in accepted_text_blocks
+                ),
+            )
+        )
+        existing = self._repositories.detection_evidence.get_optional(
+            canonical.detection_dependency_id
+        )
+        if existing is None:
+            with TemporaryDirectory(prefix="detection-evidence-") as temp_root:
+                manifest_path = Path(temp_root) / "accepted-detection-evidence-set.json"
+                manifest_path.write_bytes(canonical.canonical_bytes)
+                manifest_artifact = self._artifact_service.register_stage_json(
+                    temp_path=manifest_path,
+                    batch_id=page.batch_id,
+                    page_id=page.page_id,
+                    owner_type="accepted_detection_evidence_set",
+                    owner_id=canonical.detection_dependency_id,
+                    artifact_type="accepted_detection_evidence_manifest",
+                    source_stage="detection",
+                    retention_class="active_result",
+                    safety=ArtifactSafetyMetadata(),
+                    dependency_hash=canonical.canonical_manifest_sha256,
+                )
+            if manifest_artifact.file_hash != canonical.canonical_manifest_sha256:
+                raise ValueError("Detection evidence artifact hash is inconsistent.")
+            manifest_artifact_id = manifest_artifact.artifact_id
+        else:
+            if (
+                existing.canonical_manifest_sha256
+                != canonical.canonical_manifest_sha256
+                or tuple(member.text_block_id for member in existing.members)
+                != canonical.member_ids
+            ):
+                raise ValueError("Existing Detection evidence set is inconsistent.")
+            manifest_artifact_id = existing.manifest_artifact_id
+
+        return AcceptedDetectionEvidenceSetDraft(
+            detection_dependency_id=canonical.detection_dependency_id,
+            project_id=canonical.project_id,
+            page_id=canonical.page_id,
+            source_artifact_id=canonical.source_artifact_id,
+            source_sha256=canonical.source_sha256,
+            coordinate_space_json=canonical.coordinate_space_json,
+            canonical_member_count=len(canonical.member_ids),
+            manifest_artifact_id=manifest_artifact_id,
+            canonical_manifest_sha256=canonical.canonical_manifest_sha256,
+            schema_version=canonical.schema_version,
+            member_ids=canonical.member_ids,
+            provenance=DetectionEvidenceAcceptanceProvenanceDraft(
+                acceptance_id=f"detection-acceptance:{decision_id}",
+                workflow_attempt_id=stage_result.attempt_id,
+                workflow_decision_id=decision_id,
+                provider_execution_reference=stage_result.tool_run_id,
+            ),
         )
 
     def _accept_ocr(self, task, page, stage_result: StageResult):
@@ -898,7 +1110,9 @@ class WorkflowLoopEngine:
         expected_ocr: dict[str, str | None] | None = None,
         expected_translation: dict[str, str | None] | None = None,
         expected_page_artifacts: dict[str, str | None] | None = None,
+        decision_id: str | None = None,
         accepted_text_blocks: tuple[AcceptedTextBlock, ...] = (),
+        accepted_detection_evidence: AcceptedDetectionEvidenceSetDraft | None = None,
         accepted_results: tuple[AcceptedResult, ...] = (),
         active_pointers: tuple[ActivePointerUpdate, ...] = (),
         issue_lifecycle: tuple[IssueLifecycleChange, ...] = (),
@@ -936,7 +1150,8 @@ class WorkflowLoopEngine:
             active_pointers=active_pointers,
             issue_lifecycle=issue_lifecycle,
             workflow_decision=WorkflowDecisionDraft(
-                decision_id=f"decision-{stage_index:02d}-{current_stage}-{uuid4()}",
+                decision_id=decision_id
+                or f"decision-{stage_index:02d}-{current_stage}-{uuid4()}",
                 attempt_id=stage_result.attempt_id,
                 stage=current_stage,
                 decision_type=decision_type,
@@ -951,6 +1166,7 @@ class WorkflowLoopEngine:
             ),
             stage_statuses=stage_statuses,
             accepted_text_blocks=accepted_text_blocks,
+            accepted_detection_evidence=accepted_detection_evidence,
             page_statuses=page_statuses,
             attempt_terminal_status=attempt_terminal_status
             or ("succeeded" if task_terminal_status != "blocked" else "failed"),
