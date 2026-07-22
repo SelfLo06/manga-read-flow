@@ -50,6 +50,14 @@ Cleaner 不决定：
 - [实验索引](150-20-experiments.md)
 - [CleaningCheck](150-40-cleaning-check.md)
 
+## Physical Boundary Handoff
+
+PhysicalBoundaryEvidence 位于 Visual Contract preparation、CleaningEligibility 和 Cleaning 之前。Slice 1E 已实现正式只读 Grouping-input selector：它从唯一 Grouping pointer exact-read acceptance/check/snapshot、stale facts、Detection/OCR/Profile/source/producer bindings 与 artifacts，成功时返回未来 Physical Boundary attempt 可持久化的 immutable binding，失败时结构化拒绝且不启动 producer。Physical Boundary producer、candidate/revision、Check、acceptance 与 active pointer 仍未实现。
+
+runtime Check 不读取 oracle，也不决定 accept/retry/fallback/skip/block。实验 `PhysicalBoundaryBenchmarkEvaluator` 只能位于 `tools/experiments/150-cleaning/`，读取 frozen candidate/oracle manifest，输出实验 metrics/verdict，不创建正式 QualityIssue、revision、Visual Contract 或 active pointer。
+
+Physical Boundary 的 accepted revision 必须拥有独立的 `active_physical_boundary_evidence_revision_id`（未来 metadata/UoW extension）。只有 WorkflowLoopEngine 决策和 UoW acceptance transaction 才能推进该 pointer；VisualContractRevision 必须绑定 exact accepted evidence revision。当前仓库没有真实 Physical Boundary state，因此 Slice 1E replacement 没有可同步失效的 exact-bound 下游 pointer，也未伪造该状态。Cleaning 只消费未来完成该 binding 的 Visual Contract，当前 physical-boundary capability 仍未通过，M1 仍阻塞。
+
 ## 3. Canonical Processing Path
 
 Cleaning 的正式处理链路是：
@@ -62,6 +70,9 @@ Cleaning 的正式处理链路是：
 → required / protected / uncertainty / safe-edit evidence
 → eligibility 与 route 决定
 → Cleaner 生成候选 cleaned artifact
-→ CleaningCheck
-→ Workflow Loop 决定 accept / review / retry / skip / block
-→ ArtifactService 执行正式 artifact 登记与 active 切换
+→ ArtifactService 登记候选 artifact
+→ CleaningCheck 产生 metrics、evidence 和 IssueDrafts
+→ WorkflowLoopEngine 决定 accept / retry / fallback / skip / block
+→ UoW / Repository 原子持久化 result、decision、QualityIssues
+  并推进 active_cleaned_artifact_id
+```

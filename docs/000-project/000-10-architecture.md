@@ -4,7 +4,7 @@
 
 应用采用本地 Web UI、Python/FastAPI 后端、React/Next.js 前端、SQLite 与本地文件工作区。MVP 的本地 TaskRunner 与 FastAPI 后端同进程运行，不引入外部任务队列；当前仓库主要实现后端架构证明和单页 Cleaning 基础，API 与 Web UI 尚未形成产品入口。
 
-线性处理为 Import → Detection → Grouping → OCR → Translation → Cleaning → Typesetting → Export，Review/Edit、Workflow Loop、Quality、Retry/Recovery、Reuse/Staleness 横跨各阶段。编号是文档信息架构，不重命名或扩展现有运行时状态机。
+阶段职责按 Import → Detection → Grouping → OCR → Translation → Cleaning → Typesetting → Export 编号，Review/Edit、Workflow Loop、Quality、Retry/Recovery、Reuse/Staleness 横跨各阶段；编号属于文档信息架构，不强制运行时依赖顺序。M1 的最终 Grouping snapshot 依赖 accepted OCR，因此正式物化顺序为 Import → Detection → OCR → final FrozenGroupingEvidenceSnapshot → Physical Boundary，Translation 与 Cleaning 再按各自依赖继续。Detection 后、OCR 前的 routing/pre-grouping 只能是 proposal evidence，不能成为 authoritative Grouping snapshot。
 
 ## 固定模块边界
 
